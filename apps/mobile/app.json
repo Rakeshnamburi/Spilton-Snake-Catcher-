@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "SPILTON Snake Rescue",
+    "slug": "spilton-snake-rescue",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "spilton",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#14532D",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.spilton.snakerescue",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your location is used only when you choose it for a demo snake sighting. Manual entry remains available.",
+        "NSPhotoLibraryUsageDescription": "Choose optional snake sighting photos without moving closer to the snake."
+      }
+    },
+    "android": {
+      "package": "org.spilton.snakerescue",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-location",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose optional snake sighting photos without moving closer to the snake.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

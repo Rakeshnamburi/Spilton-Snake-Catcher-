@@ -1,0 +1,17 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root{color-scheme:light;--forest:#14532d;--emerald:#16a34a;--ink:#111827;--mist:#f8fafc}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;color:var(--ink);background:#fff;font-family:Arial,Helvetica,sans-serif}
+a{text-decoration:none}
+button,input,select,textarea{font:inherit}
+.container-page{@apply mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12}
+.eyebrow{@apply text-xs font-bold uppercase tracking-[.2em] text-emerald}
+.field{@apply mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-emerald focus:ring-4 focus:ring-emerald/10}
+.label{@apply text-sm font-semibold text-slate-700}
+.card{@apply rounded-2xl border border-slate-200 bg-white p-6 shadow-sm}
+.focus-ring{@apply focus:outline-none focus:ring-4 focus:ring-emerald/20}
+.maplibregl-map{font:inherit}

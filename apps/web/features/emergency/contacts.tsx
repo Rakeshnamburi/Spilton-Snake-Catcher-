@@ -1,0 +1,6 @@
+"use client";
+import {useEffect,useState} from "react";
+import {api} from "@/lib/api";
+type Contact={id:string;organization_name:string;state:string;district?:string;phone:string;source_url:string;verified_at:string};
+export function Contacts(){const [items,setItems]=useState<Contact[]|null>(null);useEffect(()=>{api<Contact[]>("/api/v1/emergency-contacts").then(setItems).catch(()=>setItems([]))},[]);if(items===null)return <p className="text-sm text-slate-500">Loading verified contacts…</p>;if(!items.length)return <div className="rounded-2xl border border-dashed border-slate-300 p-7 text-center"><h3 className="font-bold">No verified wildlife contacts configured</h3><p className="mt-2 text-sm text-slate-600">Administrators must add source-backed, recently verified public contacts. No numbers are invented or prefilled.</p></div>;return <div className="grid gap-4">{items.map(c=><article className="card" key={c.id}><h3 className="font-bold">{c.organization_name}</h3><p className="text-sm text-slate-600">{c.district?`${c.district}, `:""}{c.state}</p><a className="mt-3 block font-black text-forest" href={`tel:${c.phone}`}>{c.phone}</a><a className="text-xs text-slate-500 underline" href={c.source_url}>Verification source</a></article>)}</div>}
+

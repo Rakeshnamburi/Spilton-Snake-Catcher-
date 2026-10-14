@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.expo/
+dist/
+coverage/
+__pycache__/
+.pytest_cache/
+.pytest-tmp/
+.ruff_cache/
+.venv/
+*.pyc
+*.db
+.env
+uploads/
+.private_media/

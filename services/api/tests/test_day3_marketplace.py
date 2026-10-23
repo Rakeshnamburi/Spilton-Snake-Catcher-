@@ -387,14 +387,12 @@ async def test_assigned_rescuer_accepts_other_rescuer_is_denied_and_privacy_is_r
         "ACCEPTED",
     ]
     with SessionLocal() as db:
-        assert (
-            db.scalar(
-                select(func.count())
-                .select_from(NotificationEvent)
-                .where(NotificationEvent.recipient_id == customer_id)
-            )
-            == 1
-        )
+        customer_events = db.scalars(
+            select(NotificationEvent.event_type)
+            .where(NotificationEvent.recipient_id == customer_id)
+            .order_by(NotificationEvent.created_at, NotificationEvent.id)
+        ).all()
+        assert customer_events == ["BOOKING_REQUESTED", "BOOKING_ACCEPTED"]
 
 
 async def test_reject_invalid_transition_and_customer_cancellation(client):

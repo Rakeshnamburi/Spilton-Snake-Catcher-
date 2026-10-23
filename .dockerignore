@@ -1,0 +1,11 @@
+.git
+.venv
+**/node_modules
+**/.next
+**/.expo
+**/dist
+**/.pytest_cache
+**/__pycache__
+services/api/.private_media
+*.db
+.env

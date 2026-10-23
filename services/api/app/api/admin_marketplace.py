@@ -1,5 +1,6 @@
 import math
-from datetime import date
+from datetime import date, datetime, timezone
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -11,12 +12,15 @@ from app.api.deps import require_roles
 from app.api.marketplace_helpers import fail, utcnow
 from app.db.session import get_db
 from app.models.entities import (
+    AccountDataRequest,
     AuditLog,
     AvailabilityStatus,
     Booking,
     BookingStatus,
     District,
     LocationImportJob,
+    NotificationDeliveryAttempt,
+    NotificationEvent,
     Organization,
     RescuerDocument,
     RescuerProfile,
@@ -24,6 +28,8 @@ from app.models.entities import (
     Role,
     State,
     Subdistrict,
+    TrackingSession,
+    TrackingStatus,
     User,
     VerificationStatus,
     Village,
@@ -36,6 +42,11 @@ router = APIRouter(prefix="/admin", tags=["admin-marketplace"])
 
 class OrganizationVerificationUpdate(BaseModel):
     status: VerificationStatus
+    note: str = Field(min_length=3, max_length=500)
+
+
+class AccountRequestUpdate(BaseModel):
+    status: Literal["UNDER_REVIEW", "COMPLETED", "REJECTED"]
     note: str = Field(min_length=3, max_length=500)
 
 
@@ -137,6 +148,136 @@ def admin_rescuers(
         "page": page,
         "limit": limit,
         "pages": math.ceil(total / limit) if total else 0,
+    }
+
+
+@router.get("/operations/health")
+def operations_health(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.ADMIN)),
+):
+    """Return low-cardinality demo operations metrics without private record details."""
+
+    pending_bookings = (
+        db.scalar(
+            select(func.count(Booking.id)).where(
+                Booking.status.in_(
+                    [BookingStatus.REQUESTED, BookingStatus.PENDING_RESCUER_RESPONSE]
+                )
+            )
+        )
+        or 0
+    )
+    active_tracking = (
+        db.scalar(
+            select(func.count(TrackingSession.id)).where(
+                TrackingSession.status.in_([TrackingStatus.ACTIVE, TrackingStatus.PAUSED])
+            )
+        )
+        or 0
+    )
+    notification_pending = (
+        db.scalar(
+            select(func.count(NotificationDeliveryAttempt.id)).where(
+                NotificationDeliveryAttempt.status.in_(["PENDING", "RETRY_PENDING"])
+            )
+        )
+        or 0
+    )
+    notification_failed = (
+        db.scalar(
+            select(func.count(NotificationDeliveryAttempt.id)).where(
+                NotificationDeliveryAttempt.status.in_(["FAILED", "DEMO_FAILED"])
+            )
+        )
+        or 0
+    )
+    return {
+        "mode": "DEMO",
+        "database": "ok",
+        "scheduler": "EXTERNAL_PROCESS_REQUIRED",
+        "pending_bookings": pending_bookings,
+        "active_tracking_sessions": active_tracking,
+        "pending_notification_deliveries": notification_pending,
+        "failed_notification_deliveries": notification_failed,
+        "live_dispatch_enabled": False,
+        "real_payments_enabled": False,
+    }
+
+
+@router.get("/account-requests")
+def admin_account_requests(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    status: str | None = Query(default=None, max_length=30),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.ADMIN)),
+):
+    filters = [AccountDataRequest.status == status] if status else []
+    base = (
+        select(AccountDataRequest, User)
+        .join(User, User.id == AccountDataRequest.user_id)
+        .where(*filters)
+    )
+    total = db.scalar(select(func.count()).select_from(base.order_by(None).subquery())) or 0
+    rows = db.execute(
+        base.order_by(AccountDataRequest.created_at.desc()).offset((page - 1) * limit).limit(limit)
+    ).all()
+    return {
+        "items": [
+            {
+                "id": str(item.id),
+                "user_id": str(item.user_id),
+                "user_name": user.name,
+                "user_email": user.email,
+                "request_type": item.request_type,
+                "status": item.status,
+                "reason": item.reason,
+                "created_at": item.created_at,
+                "processed_at": item.processed_at,
+            }
+            for item, user in rows
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if total else 0,
+    }
+
+
+@router.patch("/account-requests/{request_id}")
+def update_account_request(
+    request_id: UUID,
+    payload: AccountRequestUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_roles(Role.ADMIN)),
+):
+    item = db.get(AccountDataRequest, request_id)
+    if item is None:
+        raise fail(404, "ACCOUNT_REQUEST_NOT_FOUND", "Account data request not found")
+    if item.status in {"COMPLETED", "REJECTED"}:
+        raise fail(409, "ACCOUNT_REQUEST_FINAL", "This account data request is already final")
+    item.status = payload.status
+    item.processed_by = admin.id
+    item.processed_at = (
+        datetime.now(timezone.utc) if payload.status in {"COMPLETED", "REJECTED"} else None
+    )
+    db.add(
+        AuditLog(
+            actor_id=admin.id,
+            action=f"ACCOUNT_REQUEST_{payload.status}",
+            entity_type="account_data_request",
+            entity_id=str(item.id),
+        )
+    )
+    db.commit()
+    db.refresh(item)
+    return {
+        "id": str(item.id),
+        "request_type": item.request_type,
+        "status": item.status,
+        "note_recorded": True,
+        "processed_at": item.processed_at,
     }
 
 
@@ -437,6 +578,19 @@ def marketplace_overview(
         "demo_bookings_accepted": booking_count(BookingStatus.ACCEPTED),
         "demo_bookings_rejected": booking_count(BookingStatus.REJECTED),
         "demo_bookings_cancelled": booking_count(BookingStatus.CANCELLED),
+        "demo_journeys_in_progress": booking_count(BookingStatus.EN_ROUTE),
+        "active_demo_tracking_sessions": db.scalar(
+            select(func.count())
+            .select_from(TrackingSession)
+            .where(TrackingSession.status.in_([TrackingStatus.ACTIVE, TrackingStatus.PAUSED]))
+        )
+        or 0,
+        "failed_notification_deliveries": db.scalar(
+            select(func.count())
+            .select_from(NotificationDeliveryAttempt)
+            .where(NotificationDeliveryAttempt.status == "FAILED")
+        )
+        or 0,
         "verified_demo_rescuers": db.scalar(
             select(func.count())
             .select_from(RescuerProfile)
@@ -458,4 +612,95 @@ def marketplace_overview(
         or 0,
         "authorized_operation_enabled": False,
         "payments_enabled": False,
+    }
+
+
+@router.get("/notifications")
+def admin_notification_deliveries(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    status: str | None = Query(default=None, max_length=30),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.ADMIN)),
+):
+    filters = []
+    if status:
+        filters.append(NotificationDeliveryAttempt.status == status.upper())
+    total = (
+        db.scalar(select(func.count()).select_from(NotificationDeliveryAttempt).where(*filters))
+        or 0
+    )
+    rows = db.execute(
+        select(NotificationDeliveryAttempt, NotificationEvent)
+        .join(
+            NotificationEvent,
+            NotificationEvent.id == NotificationDeliveryAttempt.notification_event_id,
+        )
+        .where(*filters)
+        .order_by(NotificationDeliveryAttempt.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    ).all()
+    return {
+        "items": [
+            {
+                "id": str(attempt.id),
+                "event_type": event.event_type,
+                "booking_id": str(event.booking_id) if event.booking_id else None,
+                "channel": attempt.channel,
+                "provider": attempt.provider,
+                "status": attempt.status,
+                "attempt_count": attempt.attempt_count,
+                "max_attempts": attempt.max_attempts,
+                "sanitized_result": attempt.sanitized_result,
+                "created_at": attempt.created_at,
+            }
+            for attempt, event in rows
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if total else 0,
+        "privacy_note": "Recipients, device tokens and message bodies are excluded.",
+    }
+
+
+@router.get("/tracking")
+def admin_tracking_sessions(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    status: TrackingStatus | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.ADMIN)),
+):
+    filters = [TrackingSession.is_demo.is_(True)]
+    if status:
+        filters.append(TrackingSession.status == status)
+    total = db.scalar(select(func.count()).select_from(TrackingSession).where(*filters)) or 0
+    rows = db.execute(
+        select(TrackingSession, Booking)
+        .join(Booking, Booking.id == TrackingSession.booking_id)
+        .where(*filters)
+        .order_by(TrackingSession.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    ).all()
+    return {
+        "items": [
+            {
+                "id": str(session.id),
+                "booking_reference": booking.booking_reference,
+                "status": session.status,
+                "started_at": session.started_at,
+                "last_location_at": session.last_location_at,
+                "expires_at": session.expires_at,
+                "is_demo": session.is_demo,
+            }
+            for session, booking in rows
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if total else 0,
+        "privacy_note": "Exact movement coordinates are deliberately excluded.",
     }

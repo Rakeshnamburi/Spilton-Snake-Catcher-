@@ -8,9 +8,11 @@ import {useMarketplace} from "@/features/marketplace/context";
 import type {MarketplacePage, PublicRescuer} from "@/features/marketplace/types";
 import {api, ApiError} from "@/services/api";
 import {colors} from "@/services/theme";
+import {useI18n} from "@/services/i18n";
 
 export default function NearbyRescuersScreen() {
   const router = useRouter();
+  const {t} = useI18n();
   const {location, setLocation, setSelectedRescuer} = useMarketplace();
   const [radius, setRadius] = useState("25");
   const [language, setLanguage] = useState("");
@@ -47,10 +49,10 @@ export default function NearbyRescuersScreen() {
     <LocationDirectory value={location} onChange={value => setLocation({...location, ...value})}/>
     <View style={styles.row}><TextInput style={styles.flex} mode="outlined" label="Radius km" keyboardType="numeric" value={radius} onChangeText={setRadius}/><TextInput style={styles.flex} mode="outlined" label="Language" value={language} onChangeText={setLanguage}/></View>
     <Button mode="outlined" icon="map-marker" onPress={() => router.push("/marketplace-location")}>GPS or manual location</Button>
-    <Button mode="contained" loading={loading} disabled={loading} onPress={() => void search()}>Search protected directory</Button>
+    <Button mode="contained" loading={loading} disabled={loading} onPress={() => void search()}>{t("marketplaceSearch")}</Button>
     {error ? <Text style={styles.error}>{error}</Text> : null}
-    {result && result.items.length === 0 ? <Card><Card.Content><Text variant="titleMedium" style={styles.cardTitle}>No eligible demo rescuer available</Text><Text style={styles.body}>Use the verified public emergency directory. This prototype cannot dispatch assistance.</Text><Button onPress={() => router.push("/emergency")}>Open emergency information</Button></Card.Content></Card> : null}
-    {result?.items.map(rescuer => <Card key={rescuer.id}><Card.Content style={styles.stack}><Chip compact>FICTIONAL DEMO PROFILE</Chip><Text variant="titleLarge" style={styles.cardTitle}>{rescuer.display_name}</Text><Text>{rescuer.organization}</Text><Text style={styles.body}>{rescuer.years_experience} years supplied experience · {rescuer.languages.join(", ")}</Text><Text style={styles.body}>{rescuer.distance_km === null ? "Directory coverage match" : `Approximately ${rescuer.distance_km} km`} · {rescuer.availability} (demo)</Text><Text style={styles.body}>{rescuer.service_area}</Text><View style={styles.row}><Button style={styles.flex} mode="outlined" onPress={() => {setSelectedRescuer(rescuer); router.push({pathname:"/rescuers/[id]",params:{id:rescuer.id}});}}>Profile</Button><Button style={styles.flex} mode="contained" onPress={() => {setSelectedRescuer(rescuer); router.push({pathname:"/book/[rescuerId]",params:{rescuerId:rescuer.id}});}}>Request</Button></View></Card.Content></Card>)}
+    {result && result.items.length === 0 ? <Card><Card.Content><Text variant="titleMedium" style={styles.cardTitle}>{t("marketplaceNoRescuer")}</Text><Text style={styles.body}>Use the verified public emergency directory. This prototype cannot dispatch assistance.</Text><Button onPress={() => router.push("/emergency")}>{t("marketplaceEmergency")}</Button></Card.Content></Card> : null}
+    {result?.items.map(rescuer => <Card key={rescuer.id}><Card.Content style={styles.stack}><Chip compact>FICTIONAL DEMO PROFILE</Chip><Text variant="titleLarge" style={styles.cardTitle}>{rescuer.display_name}</Text><Text>{rescuer.organization}</Text><Text style={styles.body}>{rescuer.years_experience} years supplied experience · {rescuer.languages.join(", ")}</Text><Text style={styles.body}>{rescuer.distance_km === null ? "Directory coverage match" : `Approximately ${rescuer.distance_km} km`} · {rescuer.availability} (demo)</Text><Text style={styles.body}>{rescuer.service_area}</Text><View style={styles.row}><Button style={styles.flex} mode="outlined" onPress={() => {setSelectedRescuer(rescuer); router.push({pathname:"/rescuers/[id]",params:{id:rescuer.id}});}}>{t("marketplaceProfile")}</Button><Button style={styles.flex} mode="contained" onPress={() => {setSelectedRescuer(rescuer); router.push({pathname:"/book/[rescuerId]",params:{rescuerId:rescuer.id}});}}>{t("marketplaceRequest")}</Button></View></Card.Content></Card>)}
   </Screen>;
 }
 

@@ -60,6 +60,7 @@ class BookingStatus(str, enum.Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     UNABLE_TO_ASSIST = "UNABLE_TO_ASSIST"
+    DISPUTED = "DISPUTED"
 
 
 class PaymentStatus(str, enum.Enum):
@@ -68,6 +69,13 @@ class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
     PAID = "PAID"
     FAILED = "FAILED"
+
+
+class TrackingStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    STOPPED = "STOPPED"
+    EXPIRED = "EXPIRED"
 
 
 class Urgency(str, enum.Enum):
@@ -104,10 +112,27 @@ class User(TimestampMixin, Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role), default=Role.CITIZEN, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     incidents: Mapped[list["Incident"]] = relationship(back_populates="reporter")
+
+
+class AccountDataRequest(TimestampMixin, Base):
+    __tablename__ = "account_data_requests"
+    __table_args__ = (Index("ix_account_data_request_user_status", "user_id", "status"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    request_type: Mapped[str] = mapped_column(String(20), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="REQUESTED", index=True)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    processed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Organization(TimestampMixin, Base):
@@ -481,6 +506,23 @@ class Booking(TimestampMixin, Base):
             "(latitude IS NOT NULL AND longitude IS NOT NULL)",
             name="ck_booking_coordinate_pair",
         ),
+        CheckConstraint(
+            "(arrival_latitude IS NULL AND arrival_longitude IS NULL) OR "
+            "(arrival_latitude IS NOT NULL AND arrival_longitude IS NOT NULL)",
+            name="ck_booking_arrival_coordinate_pair",
+        ),
+        CheckConstraint(
+            "arrival_latitude IS NULL OR (arrival_latitude >= -90 AND arrival_latitude <= 90)",
+            name="ck_booking_arrival_latitude",
+        ),
+        CheckConstraint(
+            "arrival_longitude IS NULL OR (arrival_longitude >= -180 AND arrival_longitude <= 180)",
+            name="ck_booking_arrival_longitude",
+        ),
+        CheckConstraint(
+            "arrival_accuracy IS NULL OR (arrival_accuracy >= 0 AND arrival_accuracy <= 10000)",
+            name="ck_booking_arrival_accuracy",
+        ),
         Index("ix_booking_customer_created", "customer_id", "created_at"),
         Index("ix_booking_rescuer_status_created", "rescuer_id", "status", "created_at"),
     )
@@ -527,6 +569,15 @@ class Booking(TimestampMixin, Base):
     is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    arrival_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    arrival_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    arrival_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    arrival_review_warning: Mapped[bool] = mapped_column(Boolean, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    customer_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -535,6 +586,10 @@ class Booking(TimestampMixin, Base):
 
 class BookingEvent(TimestampMixin, Base):
     __tablename__ = "booking_events"
+    __table_args__ = (
+        UniqueConstraint("booking_id", "sequence", name="uq_booking_event_sequence"),
+        Index("ix_booking_event_booking_sequence", "booking_id", "sequence"),
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     booking_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("bookings.id", ondelete="CASCADE"), index=True
@@ -544,6 +599,7 @@ class BookingEvent(TimestampMixin, Base):
     )
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     details: Mapped[str] = mapped_column(String(500))
+    sequence: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class BookingStatusHistory(TimestampMixin, Base):
@@ -575,6 +631,9 @@ class NotificationTemplate(TimestampMixin, Base):
 
 class NotificationEvent(TimestampMixin, Base):
     __tablename__ = "notification_events"
+    __table_args__ = (
+        UniqueConstraint("deduplication_key", name="uq_notification_event_deduplication"),
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     recipient_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
@@ -585,12 +644,19 @@ class NotificationEvent(TimestampMixin, Base):
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     title: Mapped[str] = mapped_column(String(180))
     body: Mapped[str] = mapped_column(String(500))
+    deep_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    deduplication_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class NotificationDeliveryAttempt(TimestampMixin, Base):
     __tablename__ = "notification_delivery_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "notification_event_id", "channel", name="uq_notification_delivery_channel"
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     notification_event_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("notification_events.id", ondelete="CASCADE"), index=True
@@ -599,6 +665,15 @@ class NotificationDeliveryAttempt(TimestampMixin, Base):
     provider: Mapped[str] = mapped_column(String(80))
     status: Mapped[str] = mapped_column(String(30), index=True)
     sanitized_result: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
 
 class NotificationPreference(TimestampMixin, Base):
@@ -612,6 +687,74 @@ class NotificationPreference(TimestampMixin, Base):
     )
     channel: Mapped[str] = mapped_column(String(30))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    opted_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceRegistration(TimestampMixin, Base):
+    __tablename__ = "device_registrations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "token_hash", name="uq_device_user_token"),
+        Index("ix_device_user_active", "user_id", "is_active"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    platform: Mapped[str] = mapped_column(String(20))
+    token_hash: Mapped[str] = mapped_column(String(64))
+    token_value: Mapped[str] = mapped_column(Text)
+    device_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TrackingSession(TimestampMixin, Base):
+    __tablename__ = "tracking_sessions"
+    __table_args__ = (
+        Index("ix_tracking_booking_status", "booking_id", "status"),
+        Index("ix_tracking_rescuer_status", "rescuer_id", "status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    rescuer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescuer_profiles.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[TrackingStatus] = mapped_column(
+        Enum(TrackingStatus), default=TrackingStatus.ACTIVE, index=True
+    )
+    consent_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consent_version: Mapped[str] = mapped_column(String(40))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_location_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class TrackingLocation(TimestampMixin, Base):
+    __tablename__ = "tracking_locations"
+    __table_args__ = (
+        CheckConstraint("latitude >= -90 AND latitude <= 90", name="ck_tracking_latitude"),
+        CheckConstraint("longitude >= -180 AND longitude <= 180", name="ck_tracking_longitude"),
+        CheckConstraint("accuracy >= 0 AND accuracy <= 10000", name="ck_tracking_accuracy"),
+        Index("ix_tracking_location_session_recorded", "tracking_session_id", "recorded_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tracking_session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tracking_sessions.id", ondelete="CASCADE"), index=True
+    )
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    accuracy: Mapped[float] = mapped_column(Float)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    is_simulated: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class ServicePricingRule(TimestampMixin, Base):
@@ -649,3 +792,373 @@ class BookingFinancialSnapshot(TimestampMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     pricing_authorized: Mapped[bool] = mapped_column(Boolean, default=False)
     is_illustrative: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class RescueOutcome(TimestampMixin, Base):
+    __tablename__ = "rescue_outcomes"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(String(500))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class RescueSession(TimestampMixin, Base):
+    __tablename__ = "rescue_sessions"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    rescuer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescuer_profiles.id", ondelete="RESTRICT"), index=True
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(40), default="IN_PROGRESS", index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RescueReport(TimestampMixin, Base):
+    __tablename__ = "rescue_reports"
+    __table_args__ = (
+        UniqueConstraint("booking_id", name="uq_rescue_report_booking"),
+        UniqueConstraint(
+            "rescuer_id", "idempotency_key_hash", name="uq_rescue_report_rescuer_idempotency"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rescue_session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescue_sessions.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    rescuer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescuer_profiles.id", ondelete="RESTRICT"), index=True
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    outcome_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescue_outcomes.id", ondelete="RESTRICT"), index=True
+    )
+    observations: Mapped[str] = mapped_column(Text)
+    authorized_action_summary: Mapped[str] = mapped_column(Text)
+    referral_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    species_text: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    species_verification: Mapped[str] = mapped_column(String(40), default="UNVERIFIED", index=True)
+    completion_status: Mapped[str] = mapped_column(String(40), default="SUBMITTED", index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64))
+    idempotency_request_hash: Mapped[str] = mapped_column(String(64))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RescueReportEvent(TimestampMixin, Base):
+    __tablename__ = "rescue_report_events"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rescue_report_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescue_reports.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    details: Mapped[str] = mapped_column(String(500))
+
+
+class RescueMedia(TimestampMixin, Base):
+    __tablename__ = "rescue_media"
+    __table_args__ = (
+        CheckConstraint("file_size > 0", name="ck_rescue_media_file_size"),
+        Index("ix_rescue_media_booking_type", "booking_id", "evidence_type"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    rescue_session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescue_sessions.id", ondelete="CASCADE"), index=True
+    )
+    uploader_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    storage_key: Mapped[str] = mapped_column(String(255), unique=True)
+    original_filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(80))
+    file_size: Mapped[int] = mapped_column(Integer)
+    evidence_type: Mapped[str] = mapped_column(String(50), index=True)
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retention_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    malware_scan_status: Mapped[str] = mapped_column(
+        String(30), default="NOT_CONFIGURED", index=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class EvidenceLocationMetadata(TimestampMixin, Base):
+    __tablename__ = "evidence_location_metadata"
+    __table_args__ = (
+        CheckConstraint("latitude >= -90 AND latitude <= 90", name="ck_evidence_location_latitude"),
+        CheckConstraint(
+            "longitude >= -180 AND longitude <= 180", name="ck_evidence_location_longitude"
+        ),
+        CheckConstraint(
+            "accuracy >= 0 AND accuracy <= 10000", name="ck_evidence_location_accuracy"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rescue_media_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescue_media.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    accuracy: Mapped[float] = mapped_column(Float)
+    consent_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    association_only: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class EvidenceAuditEvent(TimestampMixin, Base):
+    __tablename__ = "evidence_audit_events"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rescue_media_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescue_media.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    details: Mapped[str] = mapped_column(String(500))
+
+
+class CompletionDispute(TimestampMixin, Base):
+    __tablename__ = "completion_disputes"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    reason: Mapped[str] = mapped_column(String(1000))
+    status: Mapped[str] = mapped_column(String(40), default="OPEN", index=True)
+    coordinator_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    resolution_note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class Payment(TimestampMixin, Base):
+    __tablename__ = "payments"
+    __table_args__ = (
+        UniqueConstraint(
+            "customer_id", "idempotency_key_hash", name="uq_payment_customer_idempotency"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    payment_reference: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="RESTRICT"), index=True
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="INR")
+    method: Mapped[str] = mapped_column(String(30), index=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    provider_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64))
+    idempotency_request_hash: Mapped[str] = mapped_column(String(64))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refunded_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PaymentAttempt(TimestampMixin, Base):
+    __tablename__ = "payment_attempts"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payments.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    attempt_number: Mapped[int] = mapped_column(Integer)
+    sanitized_result: Mapped[str] = mapped_column(String(500))
+
+
+class PaymentEvent(TimestampMixin, Base):
+    __tablename__ = "payment_events"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payments.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    details: Mapped[str] = mapped_column(String(500))
+
+
+class PaymentRefund(TimestampMixin, Base):
+    __tablename__ = "payment_refunds"
+    __table_args__ = (
+        UniqueConstraint(
+            "payment_id", "idempotency_key_hash", name="uq_refund_payment_idempotency"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payments.id", ondelete="RESTRICT"), index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    reason: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(40), default="DEMO_REFUNDED", index=True)
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class PaymentProviderWebhook(TimestampMixin, Base):
+    __tablename__ = "payment_provider_webhooks"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(80), index=True)
+    event_reference: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    signature_valid: Mapped[bool] = mapped_column(Boolean, default=False)
+    sanitized_status: Mapped[str] = mapped_column(String(80))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CommissionEntry(TimestampMixin, Base):
+    __tablename__ = "commission_entries"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payments.id", ondelete="RESTRICT"), unique=True, index=True
+    )
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="RESTRICT"), index=True
+    )
+    rate_snapshot: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    eligible_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    commission_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    rescuer_share: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    reversed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"))
+    status: Mapped[str] = mapped_column(String(40), default="DEMO_RECORDED", index=True)
+    settlement_status: Mapped[str] = mapped_column(String(40), default="NOT_SETTLED", index=True)
+    currency: Mapped[str] = mapped_column(String(3), default="INR")
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class SettlementAccount(TimestampMixin, Base):
+    __tablename__ = "settlement_accounts"
+    __table_args__ = (
+        UniqueConstraint("rescuer_id", "currency", name="uq_settlement_rescuer_currency"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rescuer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescuer_profiles.id", ondelete="RESTRICT"), index=True
+    )
+    currency: Mapped[str] = mapped_column(String(3), default="INR")
+    status: Mapped[str] = mapped_column(String(40), default="DEMO_ONLY", index=True)
+    withdrawable: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class SettlementEntry(TimestampMixin, Base):
+    __tablename__ = "settlement_entries"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    settlement_account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("settlement_accounts.id", ondelete="RESTRICT"), index=True
+    )
+    commission_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("commission_entries.id", ondelete="RESTRICT"), unique=True, index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    status: Mapped[str] = mapped_column(String(40), default="PENDING_DEMO", index=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class FinancialLedgerEntry(TimestampMixin, Base):
+    __tablename__ = "financial_ledger_entries"
+    __table_args__ = (
+        CheckConstraint("amount >= 0", name="ck_financial_ledger_amount"),
+        CheckConstraint(
+            "direction IN ('DEBIT', 'CREDIT')",
+            name="ck_financial_ledger_direction",
+        ),
+        Index("ix_ledger_transaction_group", "transaction_group", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    transaction_group: Mapped[str] = mapped_column(String(64), index=True)
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payments.id", ondelete="RESTRICT"), index=True
+    )
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="RESTRICT"), index=True
+    )
+    account_code: Mapped[str] = mapped_column(String(60), index=True)
+    direction: Mapped[str] = mapped_column(String(10), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="INR")
+    description: Mapped[str] = mapped_column(String(300))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class Review(TimestampMixin, Base):
+    __tablename__ = "reviews"
+    __table_args__ = (
+        UniqueConstraint("booking_id", name="uq_review_booking"),
+        CheckConstraint("rating >= 1 AND rating <= 5", name="ck_review_rating"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    rescuer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rescuer_profiles.id", ondelete="RESTRICT"), index=True
+    )
+    rating: Mapped[int] = mapped_column(Integer)
+    review_text: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    moderation_status: Mapped[str] = mapped_column(String(40), default="PUBLISHED_DEMO", index=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ReviewAbuseReport(TimestampMixin, Base):
+    __tablename__ = "review_abuse_reports"
+    __table_args__ = (UniqueConstraint("review_id", "reporter_id", name="uq_review_reporter"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    review_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("reviews.id", ondelete="CASCADE"), index=True
+    )
+    reporter_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    reason: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(40), default="OPEN", index=True)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    resolution_note: Mapped[str | None] = mapped_column(String(500), nullable=True)

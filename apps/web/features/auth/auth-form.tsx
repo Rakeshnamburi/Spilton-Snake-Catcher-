@@ -8,6 +8,7 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {z} from "zod";
 import {Button} from "@/components/ui/button";
 import {api} from "@/lib/api";
+import {useI18n} from "@/lib/i18n";
 
 type Mode = "login" | "register";
 type Values = {name?: string; email: string; phone?: string; password: string};
@@ -27,6 +28,7 @@ function makeSchema(mode: Mode): z.ZodType<Values> {
 
 export function AuthForm({mode}: {mode: Mode}) {
   const router = useRouter();
+  const {t} = useI18n();
   const schema = useMemo(() => makeSchema(mode), [mode]);
   const {register, handleSubmit, formState: {errors, isSubmitting}, setError} = useForm<Values>({resolver: zodResolver(schema)});
 
@@ -41,13 +43,13 @@ export function AuthForm({mode}: {mode: Mode}) {
 
   return <form onSubmit={handleSubmit(submit)} className="card mx-auto max-w-lg space-y-5" noValidate>
     {mode === "register" && <>
-      <label className="block"><span className="label">Full name</span><input className="field" autoComplete="name" {...register("name")}/>{errors.name && <small className="text-danger">{errors.name.message}</small>}</label>
-      <label className="block"><span className="label">Phone</span><input className="field" type="tel" inputMode="tel" autoComplete="tel" {...register("phone")}/>{errors.phone && <small className="text-danger">{errors.phone.message}</small>}</label>
+      <label className="block"><span className="label">{t("auth.name")}</span><input className="field" autoComplete="name" {...register("name")}/>{errors.name && <small className="text-danger">{errors.name.message}</small>}</label>
+      <label className="block"><span className="label">{t("auth.phone")}</span><input className="field" type="tel" inputMode="tel" autoComplete="tel" {...register("phone")}/>{errors.phone && <small className="text-danger">{errors.phone.message}</small>}</label>
     </>}
-    <label className="block"><span className="label">Email</span><input className="field" type="email" autoComplete="email" {...register("email")}/><small className="text-danger">{errors.email?.message}</small></label>
-    <label className="block"><span className="label">Password</span><input className="field" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} {...register("password")}/><small className="text-danger">{errors.password?.message}</small></label>
+    <label className="block"><span className="label">{t("auth.email")}</span><input className="field" type="email" autoComplete="email" {...register("email")}/><small className="text-danger">{errors.email?.message}</small></label>
+    <label className="block"><span className="label">{t("auth.password")}</span><input className="field" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} {...register("password")}/><small className="text-danger">{errors.password?.message}</small></label>
     {errors.root && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-danger">{errors.root.message}</p>}
-    <Button className="w-full" disabled={isSubmitting}>{isSubmitting ? "Please wait…" : mode === "login" ? "Sign in securely" : "Create citizen account"}</Button>
-    <p className="text-center text-sm text-slate-600">{mode === "login" ? "New to SPILTON? " : "Already registered? "}<Link className="font-bold text-forest" href={mode === "login" ? "/register" : "/login"}>{mode === "login" ? "Create an account" : "Sign in"}</Link></p>
+    <Button className="w-full" disabled={isSubmitting}>{isSubmitting ? t("auth.wait") : mode === "login" ? t("auth.signIn") : t("auth.register")}</Button>
+    <p className="text-center text-sm text-slate-600">{mode === "login" ? `${t("auth.new")} ` : `${t("auth.existing")} `}<Link className="font-bold text-forest" href={mode === "login" ? "/register" : "/login"}>{mode === "login" ? t("auth.create") : t("nav.signIn")}</Link></p>
   </form>;
 }

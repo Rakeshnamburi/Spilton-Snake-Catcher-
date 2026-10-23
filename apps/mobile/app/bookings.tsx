@@ -6,9 +6,11 @@ import {Screen} from "@/components/screen";
 import type {Booking, MarketplacePage} from "@/features/marketplace/types";
 import {api, ApiError} from "@/services/api";
 import {colors} from "@/services/theme";
+import {useI18n} from "@/services/i18n";
 
 export default function MyBookingsScreen() {
   const router = useRouter();
+  const {t} = useI18n();
   const [data, setData] = useState<MarketplacePage<Booking> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -20,10 +22,10 @@ export default function MyBookingsScreen() {
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   return <Screen title="My demo bookings" subtitle="Reference numbers alone never grant access; these records require your authenticated session.">
-    {loading ? <Text>Loading protected bookings…</Text> : null}
+    {loading ? <Text>{t("bookingLoading")}</Text> : null}
     {error ? <Text style={styles.error}>{error}</Text> : null}
-    {!loading && data?.items.length === 0 ? <Card><Card.Content><Text variant="titleMedium" style={styles.title}>No demo bookings</Text><Button onPress={() => router.push("/nearby-rescuers")}>Browse demo profiles</Button></Card.Content></Card> : null}
-    {data?.items.map(booking => <Card key={booking.id}><Card.Content style={styles.stack}><Chip compact>{booking.status.replaceAll("_", " ")}</Chip><Text variant="titleLarge" style={styles.title}>{booking.booking_reference}</Text><Text>{booking.rescuer_display_name}</Text><Text>{new Date(booking.created_at).toLocaleString()}</Text><Text style={styles.demo}>DEMO ONLY · payment {booking.payment_status.toLowerCase()}</Text><Button mode="outlined" onPress={() => router.push({pathname:"/bookings/[id]",params:{id:booking.id}})}>View details</Button></Card.Content></Card>)}
+    {!loading && data?.items.length === 0 ? <Card><Card.Content><Text variant="titleMedium" style={styles.title}>{t("bookingNone")}</Text><Button onPress={() => router.push("/nearby-rescuers")}>{t("bookingBrowse")}</Button></Card.Content></Card> : null}
+    {data?.items.map(booking => <Card key={booking.id}><Card.Content style={styles.stack}><Chip compact>{booking.status.replaceAll("_", " ")}</Chip><Text variant="titleLarge" style={styles.title}>{booking.booking_reference}</Text><Text>{booking.rescuer_display_name}</Text><Text>{new Date(booking.created_at).toLocaleString()}</Text><Text style={styles.demo}>DEMO ONLY · payment {booking.payment_status.toLowerCase()}</Text><Button mode="outlined" onPress={() => router.push({pathname:"/bookings/[id]",params:{id:booking.id}})}>{t("bookingView")}</Button></Card.Content></Card>)}
   </Screen>;
 }
 

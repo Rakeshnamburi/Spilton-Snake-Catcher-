@@ -1,14 +1,20 @@
 import hmac
+import json
 import logging
+import re
+import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import router
 from app.core.config import get_settings
+from app.db.session import SessionLocal
 from app.services.request_limits import (
     MediaRequestSizeLimitMiddleware,
     RequestBodyTooLarge,
@@ -19,7 +25,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
-    version="0.2.0",
+    version="0.4.0",
     description=(
         "Shared DEMO-mode API for SPILTON web and mobile clients. "
         "No endpoint performs live rescue dispatch."
@@ -28,6 +34,37 @@ app = FastAPI(
 
 CSRF_EXEMPT_PATHS = {"/api/v1/auth/login", "/api/v1/auth/register"}
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Attach a safe correlation id, minimal security headers, and PII-free access logs."""
+
+    supplied_id = request.headers.get("x-request-id", "")
+    request_id = supplied_id if REQUEST_ID_PATTERN.fullmatch(supplied_id) else uuid.uuid4().hex
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
+    logger.info(
+        json.dumps(
+            {
+                "event": "request_completed",
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+            separators=(",", ":"),
+        )
+    )
+    return response
 
 
 @app.middleware("http")
@@ -78,17 +115,31 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/ready")
+def readiness():
+    """Readiness verifies the source-of-truth database without leaking configuration."""
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception:
+        logger.exception("Readiness database check failed")
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+    return {"status": "ready", "database": "ok", "mode": "DEMO"}
+
+
 @app.exception_handler(StarletteHTTPException)
-async def http_error(_: Request, exc: StarletteHTTPException):
+async def http_error(request: Request, exc: StarletteHTTPException):
     if isinstance(exc.detail, dict) and {"code", "message"} <= exc.detail.keys():
         error = exc.detail
     else:
         error = {"code": "HTTP_ERROR", "message": str(exc.detail)}
+    error["request_id"] = getattr(request.state, "request_id", None)
     return JSONResponse(status_code=exc.status_code, content={"error": error}, headers=exc.headers)
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error(_: Request, exc: RequestValidationError):
+async def validation_error(request: Request, exc: RequestValidationError):
     details = [
         {
             "field": ".".join(str(part) for part in item["loc"] if part != "body"),
@@ -104,6 +155,7 @@ async def validation_error(_: Request, exc: RequestValidationError):
                 "code": "VALIDATION_ERROR",
                 "message": "The request contains invalid data",
                 "details": details,
+                "request_id": getattr(request.state, "request_id", None),
             }
         },
     )
@@ -116,9 +168,16 @@ async def request_body_too_large(request: Request, _: RequestBodyTooLarge):
 
 
 @app.exception_handler(Exception)
-async def unexpected_error(_: Request, error: Exception):
-    logger.exception("Unhandled API error", exc_info=error)
+async def unexpected_error(request: Request, error: Exception):
+    request_id = getattr(request.state, "request_id", None)
+    logger.exception("Unhandled API error request_id=%s", request_id, exc_info=error)
     return JSONResponse(
         status_code=500,
-        content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"}},
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                "request_id": request_id,
+            }
+        },
     )

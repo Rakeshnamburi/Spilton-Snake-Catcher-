@@ -24,12 +24,47 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/api.Dockerfile
-    env_file: .env
+    env_file: ${SPILTON_ENV_FILE:-.env}
     ports: ["8000:8000"]
     volumes: ["private_media:/app/.private_media"]
     depends_on:
-      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  migrate:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    env_file: ${SPILTON_ENV_FILE:-.env}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres: {condition: service_healthy}
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    env_file: ${SPILTON_ENV_FILE:-.env}
+    command: ["python", "-m", "app.workers.scheduler"]
+    volumes: ["private_media:/app/.private_media"]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports: ["3000:3000"]
+    depends_on:
+      api: {condition: service_healthy}
 volumes:
   postgres_data:
   private_media:

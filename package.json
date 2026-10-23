@@ -2,21 +2,27 @@
   "name": "spilton-snake-rescue",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev:web": "npm run dev --workspace @spilton/web",
     "dev:mobile": "npm run start --workspace @spilton/mobile",
     "lint:web": "npm run lint --workspace @spilton/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build:web": "npm run build --workspace @spilton/web",
-    "test:api": "python -m pytest services/api/tests"
+    "test:api": "python -m pytest services/api/tests",
+    "check:locales": "node scripts/check-locales.mjs",
+    "scan:secrets": "node scripts/secret-scan.mjs"
   },
-  "engines": {"node": ">=20.19.0"},
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "devDependencies": {
-    "expo-router": "57.0.25",
+    "expo-router": "^57.0.28",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3"
   }
 }
-

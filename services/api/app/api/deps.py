@@ -1,8 +1,10 @@
+from uuid import UUID
+
 from fastapi import Cookie, Depends, Header, HTTPException, status
 from jwt import InvalidTokenError
 from sqlalchemy.orm import Session
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token_claims
 from app.db.session import get_db
 from app.models.entities import Role, User
 
@@ -25,13 +27,14 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
         )
     try:
-        user_id = decode_access_token(token)
+        claims = decode_access_token_claims(token)
+        user_id = UUID(claims["sub"])
     except (InvalidTokenError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session"
         ) from None
     user = db.get(User, user_id)
-    if not user or not user.is_active:
+    if not user or not user.is_active or claims["ver"] != user.token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session"
         )

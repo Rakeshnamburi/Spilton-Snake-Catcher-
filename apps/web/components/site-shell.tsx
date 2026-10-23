@@ -3,7 +3,7 @@ import Link from "next/link";
 import {Languages,Menu,ShieldCheck,X} from "lucide-react";
 import {useState} from "react";
 import {LANGUAGES, useI18n, type Language} from "@/lib/i18n";
-const links=[["nav.report","/report"],["nav.rescuers","/rescuers"],["nav.bookings","/bookings"],["nav.rescuerDesk","/rescuer/dashboard"],["nav.safety","/safety"],["nav.emergency","/emergency"],["nav.about","/about"]];
+const links=[["nav.report","/report"],["nav.rescuers","/rescuers"],["nav.bookings","/bookings"],["nav.rescuerDesk","/rescuer/dashboard"],["nav.safety","/safety"],["nav.emergency","/emergency"],["nav.about","/about"],["nav.profile","/profile"]];
 export function SiteShell({children}:{children:React.ReactNode}){
  const [open,setOpen]=useState(false);
  const {language,setLanguage,t,languageLabels}=useI18n();

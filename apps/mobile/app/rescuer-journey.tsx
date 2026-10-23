@@ -1,0 +1,37 @@
+import * as Location from "expo-location";
+import {Href, useFocusEffect, useLocalSearchParams, useRouter} from "expo-router";
+import {useCallback, useEffect, useRef, useState} from "react";
+import {StyleSheet, View} from "react-native";
+import {Button, Card, Checkbox, Text, TextInput} from "react-native-paper";
+import {Screen} from "@/components/screen";
+import {TrackingMap} from "@/components/tracking-map";
+import type {Booking, BookingTracking} from "@/features/marketplace/types";
+import {api} from "@/services/api";
+import {colors} from "@/services/theme";
+
+export default function RescuerJourneyScreen(){
+ const router=useRouter();
+ const{bookingId}=useLocalSearchParams<{bookingId:string}>();const[booking,setBooking]=useState<Booking|null>(null);const[tracking,setTracking]=useState<BookingTracking|null>(null);const[consent,setConsent]=useState(false);const[manualLat,setManualLat]=useState("");const[manualLng,setManualLng]=useState("");const[message,setMessage]=useState("");const[busy,setBusy]=useState(false);const watcher=useRef<Location.LocationSubscription|null>(null);const lastSent=useRef(0);
+ const load=useCallback(async()=>{if(!bookingId)return;try{const[b,t]=await Promise.all([api<Booking>(`/api/v1/bookings/${bookingId}`),api<BookingTracking>(`/api/v1/bookings/${bookingId}/tracking`)]);setBooking(b);setTracking(t);setMessage("");}catch(reason){setMessage(reason instanceof Error?reason.message:"Journey unavailable.");}},[bookingId]);
+ useFocusEffect(useCallback(()=>{void load();},[load]));
+ const stopWatch=useCallback(()=>{watcher.current?.remove();watcher.current=null},[]);useEffect(()=>stopWatch,[stopWatch]);
+ const send=useCallback(async(latitude:number,longitude:number,accuracy:number)=>{if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude < -90||latitude > 90||longitude < -180||longitude > 180){setMessage("Enter valid synthetic latitude and longitude values.");return}if(!bookingId||Date.now()-lastSent.current<6000)return;lastSent.current=Date.now();try{setTracking(await api<BookingTracking>(`/api/v1/bookings/${bookingId}/tracking/location`,{method:"POST",body:JSON.stringify({latitude,longitude,accuracy,recorded_at:new Date().toISOString(),is_simulated:true})}));setMessage("Private foreground demo point updated.");}catch(reason){setMessage(reason instanceof Error?reason.message:"Location update failed.");}},[bookingId]);
+ async function beginWatch(){stopWatch();watcher.current=await Location.watchPositionAsync({accuracy:Location.Accuracy.High,timeInterval:10000,distanceInterval:20},position=>void send(position.coords.latitude,position.coords.longitude,position.coords.accuracy??100));}
+ async function action(path:string,withGps=false){if(!bookingId)return;setBusy(true);try{if(withGps){const permission=await Location.requestForegroundPermissionsAsync();if(permission.status!=="granted"){setMessage("Foreground location permission denied. Manual synthetic coordinates remain available.");return}}const result=await api<BookingTracking>(`/api/v1/bookings/${bookingId}/${path}`,{method:"POST",body:path==="tracking/start"?JSON.stringify({consent:true,disclosure_version:"day4-demo-v1"}):undefined});setTracking(result);await load();if(["tracking/pause","tracking/stop","arrived"].includes(path))stopWatch();if(withGps)await beginWatch();}catch(reason){stopWatch();setMessage(reason instanceof Error?reason.message:"Action failed.");}finally{setBusy(false)}}
+ async function startManual(){await action("tracking/start");}
+ return <Screen title="Demo journey controls" subtitle="Foreground-only location sharing requires explicit consent and visible controls.">
+  <View style={styles.warning}><Text style={styles.warningText}>NO BACKGROUND TRACKING · NO LIVE DISPATCH · SIMULATED JOURNEY ONLY</Text></View>
+  {!booking||!tracking?<Text>{message||"Loading assigned journey…"}</Text>:<>
+   <Card><Card.Content style={styles.stack}><Text variant="titleLarge" style={styles.title}>{booking.booking_reference}</Text><Text>Booking: {booking.status.replaceAll("_"," ")}</Text><Text>Tracking: {tracking.status?.replaceAll("_"," ")??"NOT STARTED"}</Text><Text>Approximate destination: {booking.latitude??"manual"}, {booking.longitude??"location"}</Text></Card.Content></Card>
+   {booking.status==="ACCEPTED"?<Card><Card.Content style={styles.stack}><Text variant="titleMedium" style={styles.title}>Consent disclosure</Text><View style={styles.check}><Checkbox status={consent?"checked":"unchecked"} onPress={()=>setConsent(!consent)}/><Text style={styles.checkText}>I explicitly consent to foreground demo location sharing. It stops when I pause, stop, arrive, or leave this screen.</Text></View><Button mode="contained" disabled={!consent||busy} onPress={()=>void action("tracking/start",true)}>Start with foreground GPS</Button><Button mode="outlined" disabled={!consent||busy} onPress={()=>void startManual()}>Start with manual simulation</Button></Card.Content></Card>:null}
+   {tracking.status==="ACTIVE"?<View style={styles.row}><Button style={styles.flex} mode="contained" disabled={busy} onPress={()=>void action("tracking/pause")}>Pause</Button><Button style={styles.flex} mode="outlined" disabled={busy} onPress={()=>void action("tracking/stop")}>Stop</Button><Button style={styles.flex} mode="contained-tonal" disabled={busy} onPress={()=>void action("arrived")}>Arrived</Button></View>:null}
+   {tracking.status==="PAUSED"?<View style={styles.row}><Button style={styles.flex} mode="contained" disabled={busy} onPress={()=>void action("tracking/resume",true)}>Resume GPS</Button><Button style={styles.flex} mode="outlined" disabled={busy} onPress={()=>void action("tracking/stop")}>Stop</Button></View>:null}
+   {tracking.status==="ACTIVE"?<Card><Card.Content style={styles.stack}><Text variant="titleMedium" style={styles.title}>Synthetic manual fallback</Text><Text>Use fictional test coordinates if GPS permission is denied.</Text><TextInput mode="outlined" label="Synthetic latitude" keyboardType="decimal-pad" value={manualLat} onChangeText={setManualLat}/><TextInput mode="outlined" label="Synthetic longitude" keyboardType="decimal-pad" value={manualLng} onChangeText={setManualLng}/><Button mode="outlined" onPress={()=>void send(Number(manualLat),Number(manualLng),25)}>Send synthetic point</Button></Card.Content></Card>:null}
+   <TrackingMap tracking={tracking}/>
+   <Card><Card.Content style={styles.stack}><Text>GPS accuracy: {tracking.latest_location?`±${Math.round(tracking.latest_location.accuracy)} m`:"Unavailable"}</Text><Text>Last update: {tracking.last_location_at?new Date(tracking.last_location_at).toLocaleString():"None"}</Text><Text>Foreground watcher: {watcher.current?"requested":"stopped"}</Text></Card.Content></Card>
+   {["ARRIVED","IN_PROGRESS"].includes(booking.status)?<Button mode="contained" icon="clipboard-check" onPress={()=>router.push({pathname:"/rescuer-completion",params:{bookingId:booking.id}} as unknown as Href)}>Open demo completion record</Button>:null}
+  </>}
+  {message?<Text style={styles.message}>{message}</Text>:null}
+ </Screen>;
+}
+const styles=StyleSheet.create({warning:{backgroundColor:colors.danger,borderRadius:12,padding:14},warningText:{color:"white",fontWeight:"900",textAlign:"center",fontSize:12},stack:{gap:9},title:{fontWeight:"900",color:colors.forest},check:{flexDirection:"row",alignItems:"flex-start"},checkText:{flex:1,lineHeight:21,paddingTop:7},row:{flexDirection:"row",gap:6},flex:{flex:1},message:{fontWeight:"700",color:"#92400E"}});

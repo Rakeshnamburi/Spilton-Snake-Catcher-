@@ -44,6 +44,7 @@ from app.services.marketplace import (
     validate_booking_transition,
 )
 from app.services.rate_limit import rate_limiter
+from app.services.tracking import stop_booking_tracking
 
 router = APIRouter(tags=["bookings"])
 
@@ -214,10 +215,18 @@ def create_booking(
     add_financial_snapshot(db, booking)
     create_in_app_notification(
         db,
-        recipient_id=profile.user_id,
+        recipient_id=user.id,
         booking_id=booking.id,
         event_type="BOOKING_REQUESTED",
-        title="New demo request",
+        title="Demo request received",
+        body=f"Demo booking {booking.booking_reference} is awaiting a simulated response.",
+    )
+    create_in_app_notification(
+        db,
+        recipient_id=profile.user_id,
+        booking_id=booking.id,
+        event_type="BOOKING_ASSIGNED",
+        title="New simulated booking assigned",
         body=f"Demo booking {booking.booking_reference} is awaiting a simulated response.",
     )
     db.add(
@@ -416,6 +425,12 @@ def cancel_booking(
     except InvalidBookingTransition as error:
         raise fail(409, "INVALID_BOOKING_TRANSITION", str(error)) from error
     previous = booking.status
+    stop_booking_tracking(
+        db,
+        booking,
+        actor_id=user.id,
+        reason="Demo tracking stopped automatically because the customer cancelled the booking.",
+    )
     add_booking_state(
         db,
         booking,
@@ -427,7 +442,16 @@ def cancel_booking(
         note=payload.note,
     )
     profile = db.get(RescuerProfile, booking.rescuer_id)
-    if previous == BookingStatus.ACCEPTED and profile:
+    if (
+        previous
+        in {
+            BookingStatus.ACCEPTED,
+            BookingStatus.EN_ROUTE,
+            BookingStatus.ARRIVED,
+            BookingStatus.IN_PROGRESS,
+        }
+        and profile
+    ):
         profile.availability = AvailabilityStatus.AVAILABLE
         profile.availability_updated_at = utcnow()
         profile.last_seen_at = utcnow()

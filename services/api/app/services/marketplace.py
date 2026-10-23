@@ -5,7 +5,7 @@ import math
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -17,13 +17,13 @@ from app.models.entities import (
     BookingFinancialSnapshot,
     BookingStatus,
     BookingStatusHistory,
-    NotificationDeliveryAttempt,
     NotificationEvent,
     Organization,
     RescuerProfile,
     User,
     VerificationStatus,
 )
+from app.services.notifications import create_notification_event
 
 logger = logging.getLogger(__name__)
 MONEY = Decimal("0.01")
@@ -131,33 +131,44 @@ def create_in_app_notification(
     title: str,
     body: str,
 ) -> NotificationEvent:
-    event = NotificationEvent(
+    return create_notification_event(
+        db,
         recipient_id=recipient_id,
         booking_id=booking_id,
         event_type=event_type,
         title=title,
         body=body,
-        is_demo=True,
+        deduplication_key=f"{booking_id}:{recipient_id}:{event_type}",
+    )
+
+
+def add_booking_event(
+    db: Session,
+    booking: Booking,
+    *,
+    actor_id,
+    event_type: str,
+    details: str,
+) -> BookingEvent:
+    # SessionLocal disables autoflush. Flush previously queued events so their
+    # sequence numbers participate in MAX() before allocating the next value.
+    db.flush()
+    next_sequence = (
+        db.scalar(
+            select(func.coalesce(func.max(BookingEvent.sequence), 0)).where(
+                BookingEvent.booking_id == booking.id
+            )
+        )
+        or 0
+    ) + 1
+    event = BookingEvent(
+        booking_id=booking.id,
+        actor_id=actor_id,
+        event_type=event_type,
+        details=details,
+        sequence=next_sequence,
     )
     db.add(event)
-    db.flush()
-    db.add(
-        NotificationDeliveryAttempt(
-            notification_event_id=event.id,
-            channel="IN_APP",
-            provider="LOCAL_DEMO",
-            status="DELIVERED",
-            sanitized_result=(
-                "Stored as a local in-app demo notification; no external message sent."
-            ),
-        )
-    )
-    logger.info(
-        "demo_notification event=%s recipient_id=%s booking_id=%s",
-        event_type,
-        recipient_id,
-        booking_id,
-    )
     return event
 
 
@@ -182,13 +193,12 @@ def add_booking_state(
             note=note,
         )
     )
-    db.add(
-        BookingEvent(
-            booking_id=booking.id,
-            actor_id=actor_id,
-            event_type=event_type,
-            details=details,
-        )
+    add_booking_event(
+        db,
+        booking,
+        actor_id=actor_id,
+        event_type=event_type,
+        details=details,
     )
 
 
@@ -201,15 +211,24 @@ def validate_booking_transition(current: BookingStatus, target: BookingStatus) -
             BookingStatus.EXPIRED,
             BookingStatus.CANCELLED,
         },
-        BookingStatus.ACCEPTED: {BookingStatus.CANCELLED},
+        BookingStatus.ACCEPTED: {BookingStatus.EN_ROUTE, BookingStatus.CANCELLED},
         BookingStatus.REJECTED: set(),
         BookingStatus.EXPIRED: set(),
         BookingStatus.CANCELLED: set(),
-        BookingStatus.EN_ROUTE: set(),
-        BookingStatus.ARRIVED: set(),
-        BookingStatus.IN_PROGRESS: set(),
-        BookingStatus.COMPLETED: set(),
+        BookingStatus.EN_ROUTE: {BookingStatus.ARRIVED, BookingStatus.CANCELLED},
+        BookingStatus.ARRIVED: {
+            BookingStatus.IN_PROGRESS,
+            BookingStatus.CANCELLED,
+            BookingStatus.UNABLE_TO_ASSIST,
+        },
+        BookingStatus.IN_PROGRESS: {
+            BookingStatus.COMPLETED,
+            BookingStatus.UNABLE_TO_ASSIST,
+            BookingStatus.CANCELLED,
+        },
+        BookingStatus.COMPLETED: {BookingStatus.DISPUTED},
         BookingStatus.UNABLE_TO_ASSIST: set(),
+        BookingStatus.DISPUTED: {BookingStatus.COMPLETED},
     }
     if target not in allowed[current]:
         raise InvalidBookingTransition(

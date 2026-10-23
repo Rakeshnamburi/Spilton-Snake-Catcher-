@@ -31,6 +31,36 @@ const ENGLISH = {
   navLogin: "Sign in",
   navRegister: "Register",
   navProfile: "Profile",
+  navNearby: "Nearby demo rescuers",
+  navRescuerProfile: "Demo rescuer profile",
+  navMarketplaceLocation: "Select location",
+  navBook: "Request demo assistance",
+  navBookingConfirmation: "Demo confirmation",
+  navBookings: "My demo bookings",
+  navBookingDetails: "Booking details",
+  navTracking: "Demo live tracking",
+  profileSubtitle: "Account details loaded from the protected shared backend.",
+  profileSignInRequired: "Sign in required",
+  profileLoading: "Loading protected profile…",
+  profileName: "Full name",
+  profilePhone: "Phone",
+  profileEmail: "Email",
+  profileCurrentPassword: "Current password",
+  profileSave: "Save profile",
+  profileSaved: "Profile updated securely.",
+  profileExport: "Request data export",
+  profileDelete: "Request account deletion",
+  profileRequestRecorded: "Privacy request recorded for administrator review.",
+  profileSignOut: "Sign out everywhere",
+  marketplaceSearch: "Search protected directory",
+  marketplaceNoRescuer: "No eligible demo rescuer available",
+  marketplaceEmergency: "Open emergency information",
+  marketplaceProfile: "Profile",
+  marketplaceRequest: "Request",
+  bookingLoading: "Loading protected bookings…",
+  bookingNone: "No demo bookings",
+  bookingBrowse: "Browse demo profiles",
+  bookingView: "View details",
   homeTitle: "What do you need?",
   homeSubtitle: "Emergency medical help must not wait for this app.",
   reportAction: "Report snake sighting",
@@ -150,7 +180,8 @@ type Dictionary = Partial<Record<TranslationKey, string>>;
 const translations: Record<Locale, Dictionary> = {
   en: ENGLISH,
   te: {
-    navHome: "SPILTON", navReport: "పాము కనిపించినట్లు నివేదించండి", navLocation: "స్థలాన్ని ఎంచుకోండి",
+    navHome: "SPILTON", navReport: "పాము కనిపించినట్లు నివేదించండి", navLocation: "స్థలాన్ని ఎంచుకోండి", navProfile: "ప్రొఫైల్", navNearby: "సమీప డెమో రక్షకులు", navRescuerProfile: "డెమో రక్షకుడి ప్రొఫైల్", navMarketplaceLocation: "స్థానం ఎంచుకోండి", navBook: "డెమో సహాయం కోరండి", navBookingConfirmation: "డెమో నిర్ధారణ", navBookings: "నా డెమో బుకింగ్‌లు", navBookingDetails: "బుకింగ్ వివరాలు", navTracking: "డెమో లైవ్ ట్రాకింగ్",
+    profileSubtitle: "సురక్షిత షేర్డ్ బ్యాకెండ్ నుండి ఖాతా వివరాలు.", profileSignInRequired: "సైన్ ఇన్ అవసరం", profileLoading: "సురక్షిత ప్రొఫైల్ లోడ్ అవుతోంది…", profileName: "పూర్తి పేరు", profilePhone: "ఫోన్", profileEmail: "ఇమెయిల్", profileCurrentPassword: "ప్రస్తుత పాస్‌వర్డ్", profileSave: "ప్రొఫైల్ సేవ్ చేయండి", profileSaved: "ప్రొఫైల్ సురక్షితంగా నవీకరించబడింది.", profileExport: "డేటా ఎగుమతి కోరండి", profileDelete: "ఖాతా తొలగింపు కోరండి", profileRequestRecorded: "గోప్యత అభ్యర్థన నిర్వాహక సమీక్ష కోసం నమోదైంది.", profileSignOut: "అన్ని చోట్ల సైన్ అవుట్", marketplaceSearch: "సురక్షిత డైరెక్టరీని వెతకండి", marketplaceNoRescuer: "అర్హత గల డెమో రక్షకుడు లేరు", marketplaceEmergency: "అత్యవసర సమాచారం తెరవండి", marketplaceProfile: "ప్రొఫైల్", marketplaceRequest: "అభ్యర్థించండి", bookingLoading: "సురక్షిత బుకింగ్‌లు లోడ్ అవుతున్నాయి…", bookingNone: "డెమో బుకింగ్‌లు లేవు", bookingBrowse: "డెమో ప్రొఫైల్‌లను చూడండి", bookingView: "వివరాలు చూడండి",
     navPhotos: "ఐచ్ఛిక ఫోటోలు", navReporter: "నివేదించే వారి వివరాలు", navReview: "నివేదికను పరిశీలించండి",
     navConfirmation: "సమర్పణ నిర్ధారణ", navTrack: "నివేదికను వెతకండి", navMyReports: "నా నివేదికలు",
     navIncident: "సంఘటన వివరాలు", navTimeline: "స్థితి కాలక్రమం", navSafety: "భద్రత", navEmergency: "అత్యవసరం",
@@ -169,7 +200,8 @@ const translations: Record<Locale, Dictionary> = {
     safetyChildren: "పిల్లలు మరియు పెంపుడు జంతువులను దూరంగా ఉంచండి.", safetyNoRescue: "మీరే రక్షించడానికి ప్రయత్నించవద్దు.", safetyMedical: "పాముకాటు అనుమానం ఉంటే వెంటనే వైద్య సహాయం పొందండి మరియు 112కు కాల్ చేయండి.",
   },
   ta: {
-    navHome: "SPILTON", navReport: "பாம்பு கண்டதைப் புகாரளிக்கவும்", navLocation: "இடத்தைத் தேர்ந்தெடுக்கவும்", navPhotos: "விருப்பப் படங்கள்",
+    navHome: "SPILTON", navReport: "பாம்பு கண்டதைப் புகாரளிக்கவும்", navLocation: "இடத்தைத் தேர்ந்தெடுக்கவும்", navPhotos: "விருப்பப் படங்கள்", navProfile: "சுயவிவரம்", navNearby: "அருகிலுள்ள டெமோ மீட்பாளர்கள்", navRescuerProfile: "டெமோ மீட்பாளர் சுயவிவரம்", navMarketplaceLocation: "இடத்தைத் தேர்ந்தெடுக்கவும்", navBook: "டெமோ உதவி கோருக", navBookingConfirmation: "டெமோ உறுதி", navBookings: "என் டெமோ முன்பதிவுகள்", navBookingDetails: "முன்பதிவு விவரங்கள்", navTracking: "டெமோ நேரடி கண்காணிப்பு",
+    profileSubtitle: "பாதுகாக்கப்பட்ட பகிரப்பட்ட பின்தளத்திலிருந்து கணக்கு விவரங்கள்.", profileSignInRequired: "உள்நுழைவு தேவை", profileLoading: "பாதுகாக்கப்பட்ட சுயவிவரம் ஏற்றப்படுகிறது…", profileName: "முழுப் பெயர்", profilePhone: "தொலைபேசி", profileEmail: "மின்னஞ்சல்", profileCurrentPassword: "தற்போதைய கடவுச்சொல்", profileSave: "சுயவிவரத்தை சேமி", profileSaved: "சுயவிவரம் பாதுகாப்பாக புதுப்பிக்கப்பட்டது.", profileExport: "தரவு ஏற்றுமதி கோருக", profileDelete: "கணக்கு நீக்கம் கோருக", profileRequestRecorded: "தனியுரிமை கோரிக்கை நிர்வாகி ஆய்வுக்காக பதிவு செய்யப்பட்டது.", profileSignOut: "எங்கும் வெளியேறு", marketplaceSearch: "பாதுகாக்கப்பட்ட பட்டியலைத் தேடு", marketplaceNoRescuer: "தகுதியான டெமோ மீட்பாளர் இல்லை", marketplaceEmergency: "அவசர தகவலைத் திற", marketplaceProfile: "சுயவிவரம்", marketplaceRequest: "கோருக", bookingLoading: "பாதுகாக்கப்பட்ட முன்பதிவுகள் ஏற்றப்படுகின்றன…", bookingNone: "டெமோ முன்பதிவுகள் இல்லை", bookingBrowse: "டெமோ சுயவிவரங்களைப் பார்வையிடு", bookingView: "விவரங்களைக் காண்க",
     navReporter: "புகாரளிப்பவர் விவரங்கள்", navReview: "புகாரை மதிப்பாய்வு செய்க", navConfirmation: "சமர்ப்பிப்பு உறுதி", navTrack: "புகாரைத் தேடுக",
     navMyReports: "என் புகார்கள்", navIncident: "சம்பவ விவரங்கள்", navTimeline: "நிலை காலவரிசை", navSafety: "பாதுகாப்பு", navEmergency: "அவசரம்",
     reportAction: "பாம்பு கண்டதைப் புகாரளிக்கவும்", reportsAction: "என் புகார்களைப் பார்க்கவும்", safetyAction: "பாம்பு பாதுகாப்பு", emergencyAction: "அவசர தகவல்",
@@ -185,7 +217,8 @@ const translations: Record<Locale, Dictionary> = {
     safetyChildren: "குழந்தைகளையும் செல்லப்பிராணிகளையும் விலக்கி வைக்கவும்.", safetyNoRescue: "நீங்களே மீட்க முயற்சிக்காதீர்கள்.", safetyMedical: "பாம்புக்கடி சந்தேகம் இருந்தால் உடனடியாக மருத்துவ உதவி பெற்று 112-ஐ அழைக்கவும்.",
   },
   kn: {
-    navHome: "SPILTON", navReport: "ಹಾವು ಕಂಡಿದ್ದನ್ನು ವರದಿ ಮಾಡಿ", navLocation: "ಸ್ಥಳ ಆಯ್ಕೆಮಾಡಿ", navPhotos: "ಐಚ್ಛಿಕ ಚಿತ್ರಗಳು",
+    navHome: "SPILTON", navReport: "ಹಾವು ಕಂಡಿದ್ದನ್ನು ವರದಿ ಮಾಡಿ", navLocation: "ಸ್ಥಳ ಆಯ್ಕೆಮಾಡಿ", navPhotos: "ಐಚ್ಛಿಕ ಚಿತ್ರಗಳು", navProfile: "ಪ್ರೊಫೈಲ್", navNearby: "ಹತ್ತಿರದ ಡೆಮೊ ರಕ್ಷಕರು", navRescuerProfile: "ಡೆಮೊ ರಕ್ಷಕ ಪ್ರೊಫೈಲ್", navMarketplaceLocation: "ಸ್ಥಳ ಆಯ್ಕೆಮಾಡಿ", navBook: "ಡೆಮೊ ನೆರವು ವಿನಂತಿಸಿ", navBookingConfirmation: "ಡೆಮೊ ದೃಢೀಕರಣ", navBookings: "ನನ್ನ ಡೆಮೊ ಬುಕ್ಕಿಂಗ್‌ಗಳು", navBookingDetails: "ಬುಕ್ಕಿಂಗ್ ವಿವರಗಳು", navTracking: "ಡೆಮೊ ಲೈವ್ ಟ್ರ್ಯಾಕಿಂಗ್",
+    profileSubtitle: "ಸುರಕ್ಷಿತ ಹಂಚಿದ ಬ್ಯಾಕೆಂಡ್‌ನಿಂದ ಖಾತೆ ವಿವರಗಳು.", profileSignInRequired: "ಸೈನ್ ಇನ್ ಅಗತ್ಯ", profileLoading: "ಸುರಕ್ಷಿತ ಪ್ರೊಫೈಲ್ ಲೋಡ್ ಆಗುತ್ತಿದೆ…", profileName: "ಪೂರ್ಣ ಹೆಸರು", profilePhone: "ಫೋನ್", profileEmail: "ಇಮೇಲ್", profileCurrentPassword: "ಪ್ರಸ್ತುತ ಪಾಸ್‌ವರ್ಡ್", profileSave: "ಪ್ರೊಫೈಲ್ ಉಳಿಸಿ", profileSaved: "ಪ್ರೊಫೈಲ್ ಸುರಕ್ಷಿತವಾಗಿ ನವೀಕರಿಸಲಾಗಿದೆ.", profileExport: "ಡೇಟಾ ರಫ್ತು ವಿನಂತಿಸಿ", profileDelete: "ಖಾತೆ ಅಳಿಸುವಿಕೆ ವಿನಂತಿಸಿ", profileRequestRecorded: "ಗೌಪ್ಯತಾ ವಿನಂತಿ ನಿರ್ವಾಹಕ ಪರಿಶೀಲನೆಗಾಗಿ ದಾಖಲಾಗಿದೆ.", profileSignOut: "ಎಲ್ಲೆಡೆ ಸೈನ್ ಔಟ್", marketplaceSearch: "ಸುರಕ್ಷಿತ ಡೈರೆಕ್ಟರಿ ಹುಡುಕಿ", marketplaceNoRescuer: "ಅರ್ಹ ಡೆಮೊ ರಕ್ಷಕರು ಲಭ್ಯವಿಲ್ಲ", marketplaceEmergency: "ತುರ್ತು ಮಾಹಿತಿ ತೆರೆಯಿರಿ", marketplaceProfile: "ಪ್ರೊಫೈಲ್", marketplaceRequest: "ವಿನಂತಿಸಿ", bookingLoading: "ಸುರಕ್ಷಿತ ಬುಕ್ಕಿಂಗ್‌ಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ…", bookingNone: "ಡೆಮೊ ಬುಕ್ಕಿಂಗ್‌ಗಳಿಲ್ಲ", bookingBrowse: "ಡೆಮೊ ಪ್ರೊಫೈಲ್‌ಗಳನ್ನು ನೋಡಿ", bookingView: "ವಿವರಗಳನ್ನು ನೋಡಿ",
     navReporter: "ವರದಿದಾರರ ವಿವರಗಳು", navReview: "ವರದಿ ಪರಿಶೀಲಿಸಿ", navConfirmation: "ಸಲ್ಲಿಕೆ ದೃಢೀಕರಣ", navTrack: "ವರದಿ ಹುಡುಕಿ", navMyReports: "ನನ್ನ ವರದಿಗಳು",
     navIncident: "ಘಟನೆಯ ವಿವರಗಳು", navTimeline: "ಸ್ಥಿತಿ ಕಾಲರೇಖೆ", navSafety: "ಸುರಕ್ಷತೆ", navEmergency: "ತುರ್ತು", reportAction: "ಹಾವು ಕಂಡಿದ್ದನ್ನು ವರದಿ ಮಾಡಿ",
     reportsAction: "ನನ್ನ ವರದಿಗಳನ್ನು ನೋಡಿ", safetyAction: "ಹಾವು ಸುರಕ್ಷತೆ", emergencyAction: "ತುರ್ತು ಮಾಹಿತಿ", language: "ಭಾಷೆ", description: "ಕಂಡ ವಿವರ",
@@ -200,7 +233,8 @@ const translations: Record<Locale, Dictionary> = {
     safetyChildren: "ಮಕ್ಕಳು ಮತ್ತು ಸಾಕುಪ್ರಾಣಿಗಳನ್ನು ದೂರವಿಡಿ.", safetyNoRescue: "ನೀವೇ ರಕ್ಷಿಸಲು ಪ್ರಯತ್ನಿಸಬೇಡಿ.", safetyMedical: "ಹಾವು ಕಚ್ಚಿದ ಶಂಕೆಯಿದ್ದರೆ ತಕ್ಷಣ ವೈದ್ಯಕೀಯ ಸಹಾಯ ಪಡೆದು 112ಕ್ಕೆ ಕರೆ ಮಾಡಿ.",
   },
   ml: {
-    navHome: "SPILTON", navReport: "പാമ്പിനെ കണ്ടത് റിപ്പോർട്ട് ചെയ്യുക", navLocation: "സ്ഥലം തിരഞ്ഞെടുക്കുക", navPhotos: "ഐച്ഛിക ചിത്രങ്ങൾ",
+    navHome: "SPILTON", navReport: "പാമ്പിനെ കണ്ടത് റിപ്പോർട്ട് ചെയ്യുക", navLocation: "സ്ഥലം തിരഞ്ഞെടുക്കുക", navPhotos: "ഐച്ഛിക ചിത്രങ്ങൾ", navProfile: "പ്രൊഫൈൽ", navNearby: "സമീപത്തെ ഡെമോ രക്ഷാപ്രവർത്തകർ", navRescuerProfile: "ഡെമോ രക്ഷാപ്രവർത്തക പ്രൊഫൈൽ", navMarketplaceLocation: "സ്ഥലം തിരഞ്ഞെടുക്കുക", navBook: "ഡെമോ സഹായം അഭ്യർത്ഥിക്കുക", navBookingConfirmation: "ഡെമോ സ്ഥിരീകരണം", navBookings: "എന്റെ ഡെമോ ബുക്കിംഗുകൾ", navBookingDetails: "ബുക്കിംഗ് വിവരങ്ങൾ", navTracking: "ഡെമോ തത്സമയ ട്രാക്കിംഗ്",
+    profileSubtitle: "സുരക്ഷിത പങ്കിട്ട ബാക്കെൻഡിൽ നിന്നുള്ള അക്കൗണ്ട് വിവരങ്ങൾ.", profileSignInRequired: "സൈൻ ഇൻ ആവശ്യമാണ്", profileLoading: "സുരക്ഷിത പ്രൊഫൈൽ ലോഡ് ചെയ്യുന്നു…", profileName: "പൂർണ്ണ പേര്", profilePhone: "ഫോൺ", profileEmail: "ഇമെയിൽ", profileCurrentPassword: "നിലവിലെ പാസ്‌വേഡ്", profileSave: "പ്രൊഫൈൽ സൂക്ഷിക്കുക", profileSaved: "പ്രൊഫൈൽ സുരക്ഷിതമായി പുതുക്കി.", profileExport: "ഡാറ്റ എക്സ്പോർട്ട് ആവശ്യപ്പെടുക", profileDelete: "അക്കൗണ്ട് ഇല്ലാതാക്കൽ ആവശ്യപ്പെടുക", profileRequestRecorded: "സ്വകാര്യത അഭ്യർത്ഥന അഡ്മിൻ പരിശോധനയ്ക്കായി രേഖപ്പെടുത്തി.", profileSignOut: "എല്ലായിടത്തുനിന്നും സൈൻ ഔട്ട്", marketplaceSearch: "സുരക്ഷിത ഡയറക്ടറി തിരയുക", marketplaceNoRescuer: "യോഗ്യമായ ഡെമോ രക്ഷാപ്രവർത്തകൻ ലഭ്യമല്ല", marketplaceEmergency: "അടിയന്തര വിവരം തുറക്കുക", marketplaceProfile: "പ്രൊഫൈൽ", marketplaceRequest: "അഭ്യർത്ഥിക്കുക", bookingLoading: "സുരക്ഷിത ബുക്കിംഗുകൾ ലോഡ് ചെയ്യുന്നു…", bookingNone: "ഡെമോ ബുക്കിംഗുകളില്ല", bookingBrowse: "ഡെമോ പ്രൊഫൈലുകൾ കാണുക", bookingView: "വിവരങ്ങൾ കാണുക",
     navReporter: "റിപ്പോർട്ടറുടെ വിവരങ്ങൾ", navReview: "റിപ്പോർട്ട് പരിശോധിക്കുക", navConfirmation: "സമർപ്പണ സ്ഥിരീകരണം", navTrack: "റിപ്പോർട്ട് കണ്ടെത്തുക", navMyReports: "എന്റെ റിപ്പോർട്ടുകൾ",
     navIncident: "സംഭവത്തിന്റെ വിവരങ്ങൾ", navTimeline: "സ്ഥിതി സമയരേഖ", navSafety: "സുരക്ഷ", navEmergency: "അടിയന്തരാവസ്ഥ", reportAction: "പാമ്പിനെ കണ്ടത് റിപ്പോർട്ട് ചെയ്യുക",
     reportsAction: "എന്റെ റിപ്പോർട്ടുകൾ കാണുക", safetyAction: "പാമ്പ് സുരക്ഷ", emergencyAction: "അടിയന്തര വിവരം", language: "ഭാഷ", description: "കണ്ടതിന്റെ വിവരണം",
@@ -215,6 +249,7 @@ const translations: Record<Locale, Dictionary> = {
     safetyChildren: "കുട്ടികളെയും വളർത്തുമൃഗങ്ങളെയും അകറ്റി നിർത്തുക.", safetyNoRescue: "സ്വയം രക്ഷാപ്രവർത്തനം നടത്തരുത്.", safetyMedical: "പാമ്പുകടി സംശയമുണ്ടെങ്കിൽ ഉടൻ വൈദ്യസഹായം തേടി 112-ലേക്ക് വിളിക്കുക.",
   },
 };
+const warnedMissingKeys = new Set<string>();
 
 export const CRITICAL_TRANSLATIONS_HUMAN_REVIEWED: Record<Locale, boolean> = {
   en: true,
@@ -246,7 +281,14 @@ export function LanguageProvider({children}: {children: ReactNode}) {
       setLocaleState(next);
       await SecureStore.setItemAsync("spilton_locale", next);
     },
-    t: key => translations[locale][key] ?? ENGLISH[key],
+    t: key => {
+      const warningKey = `${locale}:${key}`;
+      if (__DEV__ && locale !== "en" && !translations[locale][key] && !warnedMissingKeys.has(warningKey)) {
+        warnedMissingKeys.add(warningKey);
+        console.warn(`[i18n] Missing ${locale} translation for ${key}; using English fallback.`);
+      }
+      return translations[locale][key] ?? ENGLISH[key];
+    },
     criticalTranslationsReviewed: CRITICAL_TRANSLATIONS_HUMAN_REVIEWED[locale],
   }), [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

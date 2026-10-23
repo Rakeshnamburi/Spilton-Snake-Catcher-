@@ -207,6 +207,7 @@ class BookingEventResponse(BaseModel):
     id: UUID
     event_type: str
     details: str
+    sequence: int
     created_at: datetime
 
 
@@ -248,6 +249,11 @@ class BookingResponse(BaseModel):
     live_dispatch_enabled: bool = False
     accepted_at: datetime | None
     responded_at: datetime | None
+    arrived_at: datetime | None
+    arrival_accuracy: float | None
+    arrival_review_warning: bool
+    completed_at: datetime | None
+    customer_confirmed_at: datetime | None
     expires_at: datetime
     created_at: datetime
     updated_at: datetime
@@ -279,6 +285,7 @@ class NotificationResponse(BaseModel):
     title: str
     body: str
     booking_id: UUID | None
+    deep_link: str | None
     is_demo: bool
     read_at: datetime | None
     created_at: datetime

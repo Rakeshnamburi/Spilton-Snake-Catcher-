@@ -13,15 +13,23 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.admin_marketplace import router as admin_marketplace_router
 from app.api.bookings import router as bookings_router
+from app.api.day5_payments import router as day5_payments_router
+from app.api.day5_rescue import router as day5_rescue_router
+from app.api.day5_reviews import router as day5_reviews_router
 from app.api.deps import get_current_user, require_roles
+from app.api.devices import router as devices_router
 from app.api.locations import router as locations_router
 from app.api.notifications import router as notifications_router
+from app.api.realtime import router as realtime_router
 from app.api.rescuers import router as rescuers_router
+from app.api.tracking import router as tracking_router
+from app.api.webhooks import router as webhooks_router
 from app.core.config import get_settings
 from app.core.errors import APIError
 from app.core.security import create_access_token, hash_password, keyed_digest, verify_password
 from app.db.session import get_db
 from app.models.entities import (
+    AccountDataRequest,
     AuditLog,
     EmergencyContact,
     Incident,
@@ -35,6 +43,8 @@ from app.models.entities import (
     VerificationStatus,
 )
 from app.schemas.api import (
+    AccountDataRequestCreate,
+    AccountDataRequestResponse,
     AdminIncidentPage,
     EmergencyContactResponse,
     IncidentCreate,
@@ -45,6 +55,7 @@ from app.schemas.api import (
     IncidentStatusUpdate,
     LoginRequest,
     LoginResponse,
+    ProfileUpdateRequest,
     RegisterRequest,
     UserResponse,
 )
@@ -182,7 +193,7 @@ def register(
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token(user.id)
+    token = create_access_token(user.id, user.token_version)
     csrf_token = set_session_cookie(response, token)
     return LoginResponse(user=user, access_token=token, csrf_token=csrf_token)
 
@@ -196,13 +207,27 @@ def login(
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
         raise api_error(401, "INVALID_CREDENTIALS", "Invalid email or password")
-    token = create_access_token(user.id)
+    token = create_access_token(user.id, user.token_version)
     csrf_token = set_session_cookie(response, token)
     return LoginResponse(user=user, access_token=token, csrf_token=csrf_token)
 
 
 @router.post("/auth/logout", status_code=204)
-def logout(response: Response):
+def logout(
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    user.token_version += 1
+    db.add(
+        AuditLog(
+            actor_id=user.id,
+            action="AUTH_SESSION_REVOKED",
+            entity_type="user",
+            entity_id=str(user.id),
+        )
+    )
+    db.commit()
     response.delete_cookie("spilton_session", path="/")
     response.delete_cookie("spilton_csrf", path="/")
 
@@ -210,6 +235,108 @@ def logout(response: Response):
 @router.get("/auth/me", response_model=UserResponse)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/auth/refresh", response_model=LoginResponse)
+def refresh_session(
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Rotate the short-lived access session and invalidate its previous token."""
+
+    user.token_version += 1
+    db.commit()
+    db.refresh(user)
+    token = create_access_token(user.id, user.token_version)
+    csrf_token = set_session_cookie(response, token)
+    return LoginResponse(user=user, access_token=token, csrf_token=csrf_token)
+
+
+@router.patch("/auth/me", response_model=UserResponse)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise api_error(401, "INVALID_CREDENTIALS", "Current password is incorrect")
+    email = str(payload.email).lower()
+    duplicate = db.scalar(
+        select(User).where(
+            User.id != user.id,
+            or_(User.email == email, User.phone == payload.phone),
+        )
+    )
+    if duplicate:
+        raise api_error(409, "ACCOUNT_EXISTS", "An account with these details already exists")
+    user.name = payload.name
+    user.email = email
+    user.phone = payload.phone
+    db.add(
+        AuditLog(
+            actor_id=user.id,
+            action="PROFILE_UPDATED",
+            entity_type="user",
+            entity_id=str(user.id),
+        )
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post(
+    "/auth/account-requests",
+    response_model=AccountDataRequestResponse,
+    status_code=201,
+)
+def create_account_data_request(
+    payload: AccountDataRequestCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    existing = db.scalar(
+        select(AccountDataRequest).where(
+            AccountDataRequest.user_id == user.id,
+            AccountDataRequest.request_type == payload.request_type,
+            AccountDataRequest.status.in_(["REQUESTED", "UNDER_REVIEW"]),
+        )
+    )
+    if existing:
+        return existing
+    item = AccountDataRequest(
+        user_id=user.id,
+        request_type=payload.request_type,
+        reason=payload.reason,
+    )
+    db.add(item)
+    db.flush()
+    db.add(
+        AuditLog(
+            actor_id=user.id,
+            action=f"ACCOUNT_{payload.request_type}_REQUESTED",
+            entity_type="account_data_request",
+            entity_id=str(item.id),
+        )
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.get("/auth/account-requests", response_model=list[AccountDataRequestResponse])
+def list_account_data_requests(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return list(
+        db.scalars(
+            select(AccountDataRequest)
+            .where(AccountDataRequest.user_id == user.id)
+            .order_by(AccountDataRequest.created_at.desc())
+        )
+    )
 
 
 @router.post("/incidents", response_model=IncidentResponse, status_code=201)
@@ -685,4 +812,11 @@ router.include_router(locations_router)
 router.include_router(rescuers_router)
 router.include_router(bookings_router)
 router.include_router(notifications_router)
+router.include_router(devices_router)
+router.include_router(tracking_router)
+router.include_router(realtime_router)
+router.include_router(webhooks_router)
 router.include_router(admin_marketplace_router)
+router.include_router(day5_rescue_router)
+router.include_router(day5_payments_router)
+router.include_router(day5_reviews_router)

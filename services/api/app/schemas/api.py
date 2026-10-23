@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 from uuid import UUID
 
 from pydantic import (
@@ -50,6 +51,43 @@ class LoginResponse(BaseModel):
     access_token: str | None = None
     token_type: str = "bearer"
     csrf_token: str | None = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    phone: str = Field(pattern=r"^\+?[0-9]{10,15}$")
+    current_password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def clean_profile_name(cls, value: str) -> str:
+        cleaned = " ".join(value.strip().split())
+        if len(cleaned) < 2:
+            raise ValueError("Name must contain at least 2 non-whitespace characters")
+        return cleaned
+
+
+class AccountDataRequestCreate(BaseModel):
+    request_type: Literal["EXPORT", "DELETION"]
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def clean_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return " ".join(value.strip().split()) or None
+
+
+class AccountDataRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    request_type: str
+    status: str
+    reason: str | None
+    processed_at: datetime | None
+    created_at: datetime
 
 
 class IncidentCreate(BaseModel):

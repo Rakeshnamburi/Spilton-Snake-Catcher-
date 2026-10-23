@@ -1,11 +1,14 @@
 export type {
   AvailabilityStatus,
   Booking,
+  BookingEventPage,
   BookingStatus,
+  BookingTracking,
   LocationItem,
   MarketplacePage,
   PublicRescuer,
   RescuerVerificationStatus,
+  TrackingStatus,
 } from "@spilton/shared-types";
 
 export type DirectoryLocation = {

@@ -148,7 +148,7 @@ def booking_response(db: Session, booking: Booking, viewer: User) -> BookingResp
     events = db.scalars(
         select(BookingEvent)
         .where(BookingEvent.booking_id == booking.id)
-        .order_by(BookingEvent.created_at, BookingEvent.id)
+        .order_by(BookingEvent.sequence)
     ).all()
     history = db.scalars(
         select(BookingStatusHistory)
@@ -187,6 +187,13 @@ def booking_response(db: Session, booking: Booking, viewer: User) -> BookingResp
         live_dispatch_enabled=False,
         accepted_at=booking.accepted_at,
         responded_at=booking.responded_at,
+        arrived_at=booking.arrived_at,
+        arrival_accuracy=booking.arrival_accuracy
+        if is_customer or is_rescuer or is_privileged
+        else None,
+        arrival_review_warning=booking.arrival_review_warning,
+        completed_at=booking.completed_at,
+        customer_confirmed_at=booking.customer_confirmed_at,
         expires_at=booking.expires_at,
         created_at=booking.created_at,
         updated_at=booking.updated_at,

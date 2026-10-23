@@ -3,6 +3,7 @@
 from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
 from app.models.entities import Incident, IncidentEvent, Role, User
+from app.services.notifications import ensure_templates
 
 DEMO_ADMIN_EMAIL = "admin.demo@spilton-demo.example"
 DEMO_CITIZEN_EMAIL = "citizen.demo@spilton-demo.example"
@@ -11,7 +12,9 @@ DEMO_CITIZEN_EMAIL = "citizen.demo@spilton-demo.example"
 def seed():
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
+        ensure_templates(db)
         if db.query(User).filter_by(email=DEMO_ADMIN_EMAIL).first():
+            db.commit()
             return
         admin = User(
             name="Fictional Demo Admin",

@@ -5,6 +5,7 @@ inside a demo booking. Both parties must already have access to the booking.
 """
 
 import hashlib
+import re
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -32,6 +33,19 @@ CUSTOMER_CAN_CALL_FROM = {
     "ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED", "DISPUTED"
 }
 RESCUER_CAN_CALL_FROM = {"ARRIVED", "IN_PROGRESS", "COMPLETED", "UNABLE_TO_ASSIST", "DISPUTED"}
+
+
+# Chat is never a back door around the masked line: phone numbers and emails
+# typed into a message are replaced before the message is stored.
+_EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
+_PHONE_PATTERN = re.compile(r"(?:\+?\d[\s().-]*){6,}\d")
+
+
+def redact_contacts(text: str) -> str:
+    """Replace emails and phone numbers so the in-app chat stays masked."""
+
+    cleaned = _EMAIL_PATTERN.sub("[email hidden]", text)
+    return _PHONE_PATTERN.sub("[number hidden]", cleaned)
 
 
 def _proxy_number(booking_id: UUID) -> str:
@@ -138,7 +152,7 @@ def send_message(
         booking_id=booking.id,
         sender_id=user.id,
         sender_role=_sender_role(booking, user),
-        body=payload.body,
+        body=redact_contacts(payload.body),
     )
     db.add(message)
     db.commit()

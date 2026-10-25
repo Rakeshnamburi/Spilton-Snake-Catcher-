@@ -20,13 +20,15 @@ class AuthEmailError(RuntimeError):
     """Raised when an authentication email could not be handed to SMTP."""
 
 
-def send_otp_email(*, recipient: str, code: str, ttl_minutes: int) -> str:
+def send_otp_email(
+    *, recipient: str, code: str, ttl_minutes: int, subject: str | None = None
+) -> str:
     """Send a one-time passcode. Returns the transport used ("smtp" or "console")."""
 
     settings = get_settings()
-    subject = "Your SPILTON sign-in code"
+    subject = subject or "Your SPILTON sign-in code"
     body = (
-        f"Your SPILTON one-time sign-in code is: {code}\n\n"
+        f"Your SPILTON one-time code is: {code}\n\n"
         f"This code expires in {ttl_minutes} minutes. "
         "If you did not request it, you can safely ignore this email.\n\n"
         "Never share this code with anyone. SPILTON staff will never ask you for it."

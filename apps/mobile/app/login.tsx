@@ -139,6 +139,7 @@ export default function Login() {
       />
       <HelperText type="error" visible={Boolean(error)}>{error}</HelperText>
       <Button mode="contained" loading={submitting} disabled={submitting} onPress={() => void submit()}>Sign in</Button>
+      <Button disabled={submitting} onPress={() => router.push("/forgot-password")}>Forgot password?</Button>
 
       <Divider />
       <Button disabled={submitting} onPress={() => setOtpOpen(value => !value)}>

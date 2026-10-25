@@ -124,6 +124,7 @@ export function AuthForm({mode}: {mode: Mode}) {
       </>}
       <label className="block"><span className="label">{t("auth.email")}</span><input className="field" type="email" autoComplete="email" {...register("email")}/><small className="text-danger">{errors.email?.message}</small></label>
       <label className="block"><span className="label">{t("auth.password")}</span><input className="field" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} {...register("password")}/><small className="text-danger">{errors.password?.message}</small></label>
+      {mode === "login" && <p className="text-right text-sm"><Link className="font-semibold text-forest" href="/forgot-password">Forgot password?</Link></p>}
       {errors.root && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-danger">{errors.root.message}</p>}
       <Button className="w-full" disabled={isSubmitting}>{isSubmitting ? t("auth.wait") : mode === "login" ? t("auth.signIn") : t("auth.register")}</Button>
       <p className="text-center text-sm text-slate-600">{mode === "login" ? `${t("auth.new")} ` : `${t("auth.existing")} `}<Link className="font-bold text-forest" href={mode === "login" ? "/register" : "/login"}>{mode === "login" ? t("auth.create") : t("nav.signIn")}</Link></p>

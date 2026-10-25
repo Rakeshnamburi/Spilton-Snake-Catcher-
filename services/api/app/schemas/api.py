@@ -58,6 +58,16 @@ class OtpVerifyBody(BaseModel):
     phone: str | None = Field(default=None, pattern=r"^\+?[0-9]{10,15}$")
 
 
+class PasswordForgotBody(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetBody(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=10)
+    new_password: str = Field(min_length=10, max_length=128)
+
+
 class OAuthExchangeBody(BaseModel):
     code: str = Field(min_length=8, max_length=512)
 

@@ -1,0 +1,2 @@
+import {ForgotPasswordForm} from "@/features/auth/forgot-password-form";
+export default function ForgotPassword(){return <section className="bg-mist py-16"><div className="container-page"><div className="mb-8 text-center"><p className="eyebrow">Account recovery</p><h1 className="mt-2 text-4xl font-black">Reset your password</h1><p className="mt-3 text-slate-600">We email a one-time code. Changing your password signs out every other session.</p></div><ForgotPasswordForm/></div></section>}

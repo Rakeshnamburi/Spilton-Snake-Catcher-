@@ -136,3 +136,66 @@ async def test_unconfigured_provider_redirects_with_error(client):
     response = await client.get("/api/v1/auth/oauth/google/start?mode=web")
     assert response.status_code == 302
     assert "error" in response.headers["location"]
+
+
+async def test_password_reset_flow(client):
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Reset Person",
+            "email": "reset@example.com",
+            "phone": "9876511111",
+            "password": "oldpassword1",
+        },
+    )
+    assert (await client.get("/api/v1/auth/me")).status_code == 200
+
+    forgot = await client.post(
+        "/api/v1/auth/password/forgot", json={"email": "reset@example.com"}
+    )
+    assert forgot.status_code == 200
+    code = forgot.json()["dev_code"]
+
+    wrong = await client.post(
+        "/api/v1/auth/password/reset",
+        json={"email": "reset@example.com", "code": "000000", "new_password": "newpassword1"},
+    )
+    assert wrong.status_code == 400
+    assert wrong.json()["error"]["code"] == "RESET_CODE_INVALID"
+
+    reset = await client.post(
+        "/api/v1/auth/password/reset",
+        json={"email": "reset@example.com", "code": code, "new_password": "newpassword1"},
+    )
+    assert reset.status_code == 200
+    assert reset.json()["reset"] is True
+
+    # Changing the password signs every existing session out.
+    assert (await client.get("/api/v1/auth/me")).status_code == 401
+
+    # The reset code is single use.
+    reuse = await client.post(
+        "/api/v1/auth/password/reset",
+        json={"email": "reset@example.com", "code": code, "new_password": "another12345"},
+    )
+    assert reuse.status_code == 400
+
+    client.cookies.clear()
+    old = await client.post(
+        "/api/v1/auth/login", json={"email": "reset@example.com", "password": "oldpassword1"}
+    )
+    assert old.status_code == 401
+    new = await client.post(
+        "/api/v1/auth/login", json={"email": "reset@example.com", "password": "newpassword1"}
+    )
+    assert new.status_code == 200
+
+
+async def test_forgot_password_does_not_reveal_accounts(client):
+    response = await client.post(
+        "/api/v1/auth/password/forgot", json={"email": "nobody@example.com"}
+    )
+    assert response.status_code == 200
+    assert response.json()["sent"] is True
+    # No code is issued (or leaked) for an address that has no account.
+    assert "dev_code" not in response.json()

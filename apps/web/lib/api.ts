@@ -33,12 +33,24 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (isUnsafe(method) && csrf && !headers.has("X-CSRF-Token")) {
     headers.set("X-CSRF-Token", csrf);
   }
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    method,
-    credentials: "include",
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      method,
+      credentials: "include",
+      headers,
+    });
+  } catch {
+    // The browser throws a bare TypeError ("Failed to fetch") when the API is
+    // not reachable at all — wrong URL, server down, or a crashed backend.
+    // Surface an actionable message instead of the opaque native one.
+    throw new ApiError(
+      `Cannot reach the SPILTON API at ${API_URL}. Make sure the backend is running and NEXT_PUBLIC_API_URL is correct.`,
+      0,
+      "NETWORK_ERROR",
+    );
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => null) as
       | {detail?: string; error?: {code?: string; message?: string; details?: unknown}}

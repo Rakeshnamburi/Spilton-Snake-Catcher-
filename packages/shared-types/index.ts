@@ -99,6 +99,9 @@ export interface PublicRescuer {
   pricing_enabled: false;
   service_charge: null;
   currency: "INR";
+  /** How this profile covers the searched area; never exposes exact codes. */
+  coverage_scope: "MANDAL" | "DISTRICT" | "STATE" | "OTHER" | null;
+  eta_minutes: number | null;
 }
 
 export interface BookingEvent {

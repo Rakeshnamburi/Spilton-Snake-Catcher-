@@ -1,8 +1,9 @@
-import {useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useLocalSearchParams, useRouter} from "expo-router";
-import {Button, HelperText, TextInput} from "react-native-paper";
+import {Button, Divider, HelperText, TextInput} from "react-native-paper";
 import {Screen} from "@/components/screen";
 import {api, saveToken} from "@/services/api";
+import {fetchProviders, startSocial, type Providers} from "@/services/auth";
 
 type LoginResponse = {access_token?: string | null};
 
@@ -13,6 +14,20 @@ export default function Register() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
+  const [providers, setProviders] = useState<Providers | null>(null);
+
+  useEffect(() => {
+    fetchProviders().then(setProviders).catch(() => setProviders(null));
+  }, []);
+
+  async function social(provider: "google" | "microsoft") {
+    setError("");
+    try {
+      await startSocial(provider, returnTo);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not open the sign-in page.");
+    }
+  }
 
   async function submit() {
     if (submitLock.current) return;
@@ -56,6 +71,17 @@ export default function Register() {
   const fields = Object.keys(form) as Array<keyof typeof form>;
   return (
     <Screen title="Citizen registration" subtitle="Privileged roles cannot be selected during public registration.">
+      {providers?.google && (
+        <Button mode="outlined" icon="google" disabled={submitting} onPress={() => void social("google")}>
+          Sign up with Google
+        </Button>
+      )}
+      {providers?.microsoft && (
+        <Button mode="outlined" icon="microsoft" disabled={submitting} onPress={() => void social("microsoft")}>
+          Sign up with Microsoft
+        </Button>
+      )}
+      {(providers?.google || providers?.microsoft) && <Divider />}
       {fields.map(key => (
         <TextInput
           key={key}

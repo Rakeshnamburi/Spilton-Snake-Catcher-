@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.auth_social import router as auth_social_router
+from app.api.messages import router as messages_router
 from app.api.routes import router
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -32,7 +34,13 @@ app = FastAPI(
     ),
 )
 
-CSRF_EXEMPT_PATHS = {"/api/v1/auth/login", "/api/v1/auth/register"}
+CSRF_EXEMPT_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/auth/register",
+    "/api/v1/auth/otp/request",
+    "/api/v1/auth/otp/verify",
+    "/api/v1/auth/oauth/exchange",
+}
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
 
@@ -108,6 +116,8 @@ app.add_middleware(
 )
 app.add_middleware(MediaRequestSizeLimitMiddleware)
 app.include_router(router)
+app.include_router(auth_social_router)
+app.include_router(messages_router)
 
 
 @app.get("/health")

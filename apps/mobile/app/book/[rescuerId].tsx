@@ -6,10 +6,13 @@ import {Screen} from "@/components/screen";
 import {useMarketplace} from "@/features/marketplace/context";
 import type {Booking, PublicRescuer} from "@/features/marketplace/types";
 import {api, ApiError} from "@/services/api";
+import {estimateFare, formatInr} from "@/services/pricing";
 import {colors} from "@/services/theme";
 
 export default function BookingRequestScreen() {
-  const {rescuerId} = useLocalSearchParams<{rescuerId:string}>();
+  const {rescuerId, distance} = useLocalSearchParams<{rescuerId:string; distance?:string}>();
+  const parsedDistance = Number(distance);
+  const fare = estimateFare(Number.isFinite(parsedDistance) && parsedDistance > 0 ? parsedDistance : null);
   const router = useRouter();
   const {location, selectedRescuer, setSelectedRescuer, setLastBooking} = useMarketplace();
   const [rescuer, setRescuer] = useState<PublicRescuer | null>(selectedRescuer?.id === rescuerId ? selectedRescuer : null);
@@ -46,7 +49,7 @@ export default function BookingRequestScreen() {
 
   if (review && rescuer) return <Screen title="Review demo request" subtitle="Nothing is sent until you press the final simulated submit button.">
     <View style={styles.danger}><Text style={styles.dangerText}>NO LIVE DISPATCH OR PAYMENT</Text></View>
-    <Card><Card.Content style={styles.stack}><Text variant="titleLarge" style={styles.title}>{rescuer.display_name}</Text><Text>{rescuer.organization}</Text><Text>LGD {location.state_code} / {location.district_code}</Text><Text>{location.manualAddress || `${location.latitude}, ${location.longitude}`}</Text><Text style={styles.body}>{notes}</Text><Text style={styles.money}>₹0.00 collected. 10% commission concept is illustrative only.</Text></Card.Content></Card>
+    <Card><Card.Content style={styles.stack}><Text variant="titleLarge" style={styles.title}>{rescuer.display_name}</Text><Text>{rescuer.organization}</Text><Text>LGD {location.state_code} / {location.district_code}</Text><Text>{location.manualAddress || `${location.latitude}, ${location.longitude}`}</Text><Text style={styles.body}>{notes}</Text><Text style={styles.money}>Illustrative estimate {formatInr(fare.total)} · ₹0.00 collected. Settle as a simulated cash or online record after completion.</Text></Card.Content></Card>
     <View style={styles.row}><Button style={styles.flex} mode="outlined" onPress={() => setReview(false)}>Edit</Button><Button style={styles.flex} mode="contained" loading={busy} disabled={busy} onPress={() => void submit()}>Submit demo</Button></View>
     {error ? <Text style={styles.error}>{error}</Text> : null}
   </Screen>;
@@ -54,6 +57,7 @@ export default function BookingRequestScreen() {
   return <Screen title="Request demo assistance" subtitle="Create a simulated request to a fictional eligible profile. No real message is sent.">
     {injury ? <View style={styles.emergency}><Text variant="titleMedium" style={styles.emergencyTitle}>Call 112 and seek immediate medical care now</Text><Text>Do not wait for this demo form. Submission is not emergency assistance.</Text></View> : null}
     {rescuer ? <Card><Card.Content><Text variant="titleLarge" style={styles.title}>{rescuer.display_name}</Text><Text>{rescuer.organization} · {rescuer.availability} demo status</Text></Card.Content></Card> : <Text>Loading profile…</Text>}
+    <Card><Card.Content style={styles.stack}><Text variant="titleMedium" style={styles.title}>Estimated demo cost</Text><View style={styles.fareRow}><Text>Base callout</Text><Text style={styles.fareValue}>{formatInr(fare.baseFare)}</Text></View><View style={styles.fareRow}><Text>Travel{fare.distanceKm != null ? ` (~${fare.distanceKm} km)` : ""}</Text><Text style={styles.fareValue}>{fare.travelFare != null ? formatInr(fare.travelFare) : "Based on distance"}</Text></View><View style={styles.fareRow}><Text style={styles.fareTotalLabel}>Estimated total</Text><Text style={styles.fareTotal}>{formatInr(fare.total)}{fare.travelFare == null ? "+" : ""}</Text></View><Text style={styles.caption}>Illustrative demo estimate only. No money is collected and no invoice is issued.</Text></Card.Content></Card>
     <Button mode="outlined" icon="map-marker" onPress={() => router.push("/marketplace-location")}>{location.state_code ? `LGD ${location.state_code} / ${location.district_code || "district needed"}` : "Select GPS or manual location"}</Button>
     <View style={styles.switchRow}><View style={styles.flex}><Text variant="titleSmall">Is anyone bitten or injured?</Text><Text style={styles.caption}>This only displays urgent medical guidance.</Text></View><Switch value={injury} onValueChange={setInjury}/></View>
     <TextInput mode="outlined" label="Situation details" multiline numberOfLines={5} value={notes} onChangeText={setNotes}/>
@@ -63,4 +67,4 @@ export default function BookingRequestScreen() {
   </Screen>;
 }
 
-const styles=StyleSheet.create({danger:{backgroundColor:colors.danger,borderRadius:12,padding:14},dangerText:{color:"white",fontWeight:"900",textAlign:"center"},emergency:{backgroundColor:"#FEF2F2",borderWidth:2,borderColor:colors.danger,borderRadius:12,padding:16,gap:6},emergencyTitle:{fontWeight:"900",color:colors.danger},title:{fontWeight:"900",color:colors.forest},stack:{gap:10},body:{lineHeight:21},money:{fontWeight:"800",color:colors.forest},row:{flexDirection:"row",gap:10},flex:{flex:1},switchRow:{flexDirection:"row",alignItems:"center",gap:12},caption:{fontSize:12,color:"#64748B"},checkRow:{flexDirection:"row",alignItems:"flex-start"},checkText:{flex:1,fontSize:13,lineHeight:19,paddingTop:8},error:{color:colors.danger,fontWeight:"700"}});
+const styles=StyleSheet.create({fareRow:{flexDirection:"row",justifyContent:"space-between"},fareValue:{fontWeight:"800",color:colors.forest},fareTotalLabel:{fontWeight:"800"},fareTotal:{fontWeight:"900",fontSize:18,color:colors.forest},danger:{backgroundColor:colors.danger,borderRadius:12,padding:14},dangerText:{color:"white",fontWeight:"900",textAlign:"center"},emergency:{backgroundColor:"#FEF2F2",borderWidth:2,borderColor:colors.danger,borderRadius:12,padding:16,gap:6},emergencyTitle:{fontWeight:"900",color:colors.danger},title:{fontWeight:"900",color:colors.forest},stack:{gap:10},body:{lineHeight:21},money:{fontWeight:"800",color:colors.forest},row:{flexDirection:"row",gap:10},flex:{flex:1},switchRow:{flexDirection:"row",alignItems:"center",gap:12},caption:{fontSize:12,color:"#64748B"},checkRow:{flexDirection:"row",alignItems:"flex-start"},checkText:{flex:1,fontSize:13,lineHeight:19,paddingTop:8},error:{color:colors.danger,fontWeight:"700"}});

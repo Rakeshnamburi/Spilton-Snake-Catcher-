@@ -47,6 +47,8 @@ class RescuerApplicationCreate(BaseModel):
     authorization_expiry: date
     service_area_description: str = Field(min_length=5, max_length=500)
     service_radius_km: float = Field(gt=0, le=100)
+    # Other mandal / taluk LGD codes the rescuer is willing to travel to.
+    coverage_subdistrict_codes: list[str] = Field(default_factory=list, max_length=60)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     operating_hours: dict[str, str] = Field(default_factory=dict)
@@ -63,6 +65,13 @@ class RescuerApplicationCreate(BaseModel):
     @classmethod
     def clean_text(cls, value: str) -> str:
         return " ".join(value.strip().split())
+
+    @field_validator("coverage_subdistrict_codes")
+    @classmethod
+    def clean_coverage(cls, values: list[str]) -> list[str]:
+        cleaned = [" ".join(str(value).strip().split()) for value in values if str(value).strip()]
+        cleaned = [value for value in dict.fromkeys(cleaned) if len(value) <= 20]
+        return cleaned
 
     @field_validator("languages")
     @classmethod
@@ -107,6 +116,7 @@ class RescuerApplicationResponse(BaseModel):
     authorization_expiry: date | None
     service_area_description: str
     service_radius_km: float
+    coverage_subdistrict_codes: list[str] = Field(default_factory=list)
     availability: AvailabilityStatus
     operating_hours: dict
     verification_status: VerificationStatus
@@ -133,6 +143,10 @@ class PublicRescuer(BaseModel):
     pricing_enabled: bool = False
     service_charge: Decimal | None = None
     currency: str = "INR"
+    # "MANDAL" | "DISTRICT" | "STATE" | "OTHER" - how this profile covers the
+    # area the customer searched in. Never exposes the rescuer's exact codes.
+    coverage_scope: str | None = None
+    eta_minutes: int | None = None
 
 
 class RescuerPage(BaseModel):
@@ -289,3 +303,40 @@ class NotificationResponse(BaseModel):
     is_demo: bool
     read_at: datetime | None
     created_at: datetime
+
+
+class BookingMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def clean_body(cls, value: str) -> str:
+        cleaned = " ".join(value.strip().split())
+        if not cleaned:
+            raise ValueError("A message body is required")
+        return cleaned
+
+
+class BookingMessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    booking_id: UUID
+    sender_id: UUID
+    sender_role: str
+    body: str
+    read_at: datetime | None
+    created_at: datetime
+
+
+class BookingContactResponse(BaseModel):
+    """A masked (proxy) calling line. The real phone number is never returned."""
+
+    booking_id: UUID
+    proxy_number: str
+    label: str
+    masked: bool = True
+    real_number_hidden: bool = True
+    counterpart_role: str
+    connectable: bool
+    available_from: str
+    message: str

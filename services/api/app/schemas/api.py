@@ -42,8 +42,31 @@ class UserResponse(BaseModel):
     id: UUID
     name: str
     email: EmailStr
-    phone: str
+    phone: str | None = None
     role: Role
+
+
+class OtpRequestBody(BaseModel):
+    email: EmailStr
+
+
+class OtpVerifyBody(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=10)
+    # Optional profile details used only when this OTP creates a brand new account.
+    name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, pattern=r"^\+?[0-9]{10,15}$")
+
+
+class OAuthExchangeBody(BaseModel):
+    code: str = Field(min_length=8, max_length=512)
+
+
+class AuthProvidersResponse(BaseModel):
+    password: bool = True
+    email_otp: bool = True
+    google: bool = False
+    microsoft: bool = False
 
 
 class LoginResponse(BaseModel):

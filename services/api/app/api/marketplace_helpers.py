@@ -100,7 +100,10 @@ def public_rescuer(
     user: User,
     organization: Organization,
     distance_km: float | None = None,
+    coverage_scope: str | None = None,
 ) -> PublicRescuer:
+    # Rough ETA from distance at ~25 km/h average; clearly an estimate only.
+    eta_minutes = round(distance_km / 25 * 60) if distance_km is not None else None
     return PublicRescuer(
         id=profile.id,
         display_name=profile.public_display_name or user.name,
@@ -118,6 +121,8 @@ def public_rescuer(
         is_demo=profile.is_demo,
         pricing_enabled=False,
         service_charge=None,
+        coverage_scope=coverage_scope,
+        eta_minutes=eta_minutes,
     )
 
 

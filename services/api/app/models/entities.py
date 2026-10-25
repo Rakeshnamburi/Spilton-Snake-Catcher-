@@ -108,8 +108,10 @@ class User(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # phone and password_hash are nullable so that social/OTP accounts, which
+    # may not have a phone number or a password, can still own a row here.
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role), default=Role.CITIZEN, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     token_version: Mapped[int] = mapped_column(Integer, default=0)
@@ -117,6 +119,45 @@ class User(TimestampMixin, Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     incidents: Mapped[list["Incident"]] = relationship(back_populates="reporter")
+    oauth_identities: Mapped[list["OAuthIdentity"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class OAuthIdentity(TimestampMixin, Base):
+    """Links an external identity provider account to a local user."""
+
+    __tablename__ = "oauth_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_oauth_provider_user"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    provider_user_id: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(255))
+    display_name: Mapped[str | None] = mapped_column(String(120))
+    user: Mapped[User] = relationship(back_populates="oauth_identities")
+
+
+class AuthOtp(Base):
+    """A single-use, hashed one-time passcode emailed to a sign-in address."""
+
+    __tablename__ = "auth_otp_codes"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    code_hash: Mapped[str] = mapped_column(String(128))
+    purpose: Mapped[str] = mapped_column(String(20), default="LOGIN")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+    )
 
 
 class AccountDataRequest(TimestampMixin, Base):
@@ -175,6 +216,8 @@ class RescuerProfile(TimestampMixin, Base):
     authorization_expiry: Mapped[datetime | None] = mapped_column(Date, nullable=True)
     service_area_description: Mapped[str] = mapped_column(String(500), default="")
     service_radius_km: Mapped[float] = mapped_column(Float, default=25.0)
+    # Other sub-district (mandal / taluk) LGD codes this rescuer will travel to.
+    coverage_subdistrict_codes: Mapped[list[str]] = mapped_column(JSON, default=list)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     availability: Mapped[AvailabilityStatus] = mapped_column(
@@ -614,6 +657,27 @@ class BookingStatusHistory(TimestampMixin, Base):
     previous_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     status: Mapped[str] = mapped_column(String(40), index=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class BookingMessage(Base):
+    """An in-app message exchanged between a customer and the assigned rescuer."""
+
+    __tablename__ = "booking_messages"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"), index=True
+    )
+    sender_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    sender_role: Mapped[str] = mapped_column(String(20))
+    body: Mapped[str] = mapped_column(String(1000))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+    )
 
 
 class NotificationTemplate(TimestampMixin, Base):

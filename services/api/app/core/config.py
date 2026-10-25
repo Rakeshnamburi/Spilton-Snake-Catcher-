@@ -55,12 +55,75 @@ class Settings(BaseSettings):
     payment_webhook_secret: str | None = None
     error_monitoring_dsn: str | None = None
 
+    # --- Email OTP sign-in -------------------------------------------------
+    otp_length: int = 6
+    otp_ttl_minutes: int = 10
+    otp_max_attempts: int = 5
+    otp_resend_cooldown_seconds: int = 30
+
+    # --- Social / OAuth sign-in --------------------------------------------
+    # api_public_url is the browser-reachable base URL of THIS API. OAuth
+    # providers redirect back to "{api_public_url}/api/v1/auth/oauth/{p}/callback".
+    api_public_url: str = "http://localhost:8000"
+    web_app_url: str = "http://localhost:3000"
+    mobile_app_scheme: str = "spilton"
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    microsoft_tenant: str = "common"
+    oauth_state_ttl_minutes: int = 15
+
+    @field_validator(
+        "demo_mode",
+        "authorized_operation_enabled",
+        "pricing_authorized",
+        "payments_enabled",
+        mode="before",
+    )
+    @classmethod
+    def coerce_literal_bool(cls, value: object) -> object:
+        """Accept the string values pydantic-settings reads from a .env file.
+
+        pydantic does not coerce "true"/"false" strings into a Literal[True] /
+        Literal[False] field, so copying `.env.example` verbatim (which sets
+        DEMO_MODE=true, AUTHORIZED_OPERATION_ENABLED=false, ...) previously made
+        the whole API fail to boot. Coercing here keeps the safety constraints
+        intact while allowing the documented env file to load.
+        """
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return value
+
     @field_validator("jwt_secret")
     @classmethod
     def validate_secret(cls, value: str) -> str:
         if len(value) < 32:
             raise ValueError("JWT_SECRET must contain at least 32 characters")
         return value
+
+    @property
+    def social_login_enabled(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def microsoft_login_enabled(self) -> bool:
+        return bool(self.microsoft_client_id and self.microsoft_client_secret)
+
+    @property
+    def email_otp_enabled(self) -> bool:
+        return True
+
+    @property
+    def smtp_configured(self) -> bool:
+        return all(
+            [
+                self.smtp_host,
+                self.smtp_username,
+                self.smtp_password,
+                self.smtp_from_address,
+            ]
+        )
 
     @property
     def origins(self) -> list[str]:

@@ -92,6 +92,33 @@ Rescuers who tick extra mandals in **Join as catcher** show a
 
 ---
 
+## Approving a new catcher (why they stay "pending")
+
+A newly registered catcher is **deliberately invisible** until an administrator
+approves them. This is the same rule the reference app uses: unknown catchers must
+never appear in the directory. The full order matters:
+
+1. **Catcher** — register, then **Join as catcher** and submit the application.
+2. **Catcher** — upload **one private authorization document**. This is optional on
+   the form but **required before approval** (otherwise the API answers
+   `EVIDENCE_REQUIRED`).
+3. **Admin** — sign in as `admin.demo@spilton-demo.example` → **Admin → Rescuers**:
+   - verify the **organization** first (otherwise `ORGANIZATION_NOT_VERIFIED`),
+   - move the rescuer `PENDING_VERIFICATION → UNDER_REVIEW`,
+   - then `UNDER_REVIEW → VERIFIED`. This also grants the RESCUER role.
+4. **Catcher** — sign in again and set availability to **AVAILABLE**.
+5. Now the catcher appears in `/rescuers` for matching mandals.
+
+A status change always needs a short **note** (that is the audit reason).
+
+## Privacy in chat
+
+Phone numbers and emails typed into the in-app chat are replaced with
+`[number hidden]` / `[email hidden]` before the message is stored, so chat can
+never be used to bypass the masked calling line.
+
+---
+
 ## 4. Optional extras (only if you want them)
 
 **Email OTP (Gmail)** — open `services/api/.env` and fill the `SMTP_*` lines

@@ -133,3 +133,38 @@ async def test_masked_contact_line_hides_real_numbers(client):
         f"/api/v1/bookings/{booking_id}/contact", headers=_token(outsider_id)
     )
     assert blocked.status_code == 403
+
+
+async def test_chat_redacts_phone_numbers_and_emails(client):
+    from app.api.messages import redact_contacts
+
+    assert redact_contacts("Call me on 9876543210 now") == "Call me on [number hidden] now"
+    assert redact_contacts("mail a@b.com please") == "mail [email hidden] please"
+    assert redact_contacts("reach +91 98765-43210 today") == "reach [number hidden] today"
+    # Short numbers that are not phone numbers are left alone.
+    assert redact_contacts("flat 1234 is fine") == "flat 1234 is fine"
+
+    with SessionLocal() as db:
+        _directory(db)
+        customer = _user(db, email="redact.customer@example.com")
+        _, rescuer = _rescuer(db, email="redact.rescuer@example.com")
+        db.commit()
+        customer_id = customer.id
+        rescuer_id = str(rescuer.id)
+
+    created = await client.post(
+        "/api/v1/bookings",
+        headers={**_token(customer_id), "Idempotency-Key": str(uuid.uuid4())},
+        json=_booking_payload(rescuer_id),
+    )
+    booking_id = created.json()["id"]
+    sent = await client.post(
+        f"/api/v1/bookings/{booking_id}/messages",
+        headers=_token(customer_id),
+        json={"body": "Call 9876543210 or email test@gmail.com"},
+    )
+    assert sent.status_code == 201
+    assert "9876543210" not in sent.json()["body"]
+    assert "test@gmail.com" not in sent.json()["body"]
+    assert "[number hidden]" in sent.json()["body"]
+    assert "[email hidden]" in sent.json()["body"]

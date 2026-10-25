@@ -26,13 +26,15 @@ from app.api.routes import api_error, enforce_rate_limit, set_session_cookie
 from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, keyed_digest
 from app.db.session import get_db
-from app.models.entities import AuthOtp, OAuthIdentity, Role, User
+from app.models.entities import AuditLog, AuthOtp, OAuthIdentity, Role, User
 from app.schemas.api import (
     AuthProvidersResponse,
     LoginResponse,
     OAuthExchangeBody,
     OtpRequestBody,
     OtpVerifyBody,
+    PasswordForgotBody,
+    PasswordResetBody,
 )
 from app.services.auth_email import AuthEmailError, send_otp_email
 
@@ -284,6 +286,108 @@ def otp_verify(
     if not user.is_active:
         raise api_error(403, "ACCOUNT_DISABLED", "This account is disabled.")
     return _issue_session(db, response, user)
+
+
+# --------------------------------------------------------------------------- #
+# Password reset (forgot password)
+# --------------------------------------------------------------------------- #
+@router.post("/password/forgot")
+def password_forgot(
+    payload: PasswordForgotBody, request: Request, db: Session = Depends(get_db)
+):
+    """Email a password-reset code.
+
+    Always answers the same way so the endpoint cannot be used to discover which
+    addresses have accounts.
+    """
+
+    settings = get_settings()
+    email = payload.email.strip().lower()
+    enforce_rate_limit(f"pw-forgot-email:{email}", limit=5, window_seconds=900)
+    enforce_rate_limit(f"pw-forgot-ip:{_client_ip(request)}", limit=20, window_seconds=900)
+
+    result: dict = {"sent": True, "expires_in_seconds": settings.otp_ttl_minutes * 60}
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None or not user.is_active:
+        return result
+
+    now = datetime.now(timezone.utc)
+    code = _generate_otp(settings.otp_length)
+    db.add(
+        AuthOtp(
+            email=email,
+            code_hash=keyed_digest(f"reset:{email}:{code}"),
+            purpose="PASSWORD_RESET",
+            expires_at=now + timedelta(minutes=settings.otp_ttl_minutes),
+        )
+    )
+    db.commit()
+
+    try:
+        transport = send_otp_email(
+            recipient=email,
+            code=code,
+            ttl_minutes=settings.otp_ttl_minutes,
+            subject="Reset your SPILTON password",
+        )
+    except AuthEmailError as error:
+        raise api_error(502, "EMAIL_SEND_FAILED", str(error)) from error
+
+    if transport == "console" and settings.environment.lower() == "development":
+        result["dev_code"] = code
+    return result
+
+
+@router.post("/password/reset")
+def password_reset(
+    payload: PasswordResetBody, request: Request, db: Session = Depends(get_db)
+):
+    settings = get_settings()
+    email = payload.email.strip().lower()
+    enforce_rate_limit(f"pw-reset:{email}", limit=10, window_seconds=900)
+
+    record = db.scalar(
+        select(AuthOtp)
+        .where(
+            AuthOtp.email == email,
+            AuthOtp.purpose == "PASSWORD_RESET",
+            AuthOtp.consumed_at.is_(None),
+        )
+        .order_by(AuthOtp.created_at.desc())
+        .limit(1)
+    )
+    if record is None:
+        raise api_error(400, "RESET_CODE_NOT_FOUND", "Request a new reset code to continue.")
+    now = datetime.now(timezone.utc)
+    if _as_utc(record.expires_at) < now:
+        raise api_error(400, "RESET_CODE_EXPIRED", "That code has expired. Request a new one.")
+    if record.attempts >= settings.otp_max_attempts:
+        raise api_error(429, "RESET_TOO_MANY_ATTEMPTS", "Too many attempts. Request a new code.")
+
+    expected = keyed_digest(f"reset:{email}:{payload.code.strip()}")
+    if not hmac.compare_digest(expected, record.code_hash):
+        record.attempts += 1
+        db.commit()
+        raise api_error(400, "RESET_CODE_INVALID", "That code is incorrect.")
+
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None or not user.is_active:
+        raise api_error(400, "RESET_CODE_INVALID", "That code is incorrect.")
+
+    record.consumed_at = now
+    user.password_hash = hash_password(payload.new_password)
+    # Changing the password signs the account out everywhere.
+    user.token_version += 1
+    db.add(
+        AuditLog(
+            actor_id=user.id,
+            action="AUTH_PASSWORD_RESET",
+            entity_type="user",
+            entity_id=str(user.id),
+        )
+    )
+    db.commit()
+    return {"reset": True}
 
 
 # --------------------------------------------------------------------------- #

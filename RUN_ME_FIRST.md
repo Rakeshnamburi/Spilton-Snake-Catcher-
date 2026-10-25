@@ -111,6 +111,19 @@ never appear in the directory. The full order matters:
 
 A status change always needs a short **note** (that is the audit reason).
 
+## Forgot password
+
+`/forgot-password` (web) and the **Forgot password?** button on the mobile sign-in
+screen both email a one-time reset code. The reset endpoint:
+
+- always answers the same way, so it cannot be used to discover which emails have accounts
+- stores the code hashed, single-use, expiring in 10 minutes, with an attempt limit
+- **signs the account out everywhere** after a successful reset (`token_version` bump)
+- writes an `AUTH_PASSWORD_RESET` audit entry
+
+Without SMTP configured the code is printed in the API console and returned as
+`dev_code` in development only.
+
 ## Privacy in chat
 
 Phone numbers and emails typed into the in-app chat are replaced with

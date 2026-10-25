@@ -11,6 +11,7 @@ Every row written here is marked with source_version / is_demo so it can never
 be mistaken for official LGD data or a real responder.
 """
 
+import os
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -34,6 +35,12 @@ from app.services.notifications import ensure_templates
 
 DEMO_PASSWORD = "ChangeThisDemo123!"
 DEMO_ADMIN_EMAIL = "admin.demo@spilton-demo.example"
+
+# The owner is the only real account. Set OWNER_EMAIL / OWNER_PASSWORD in the
+# environment to change them; the defaults exist so local runs work out of the box.
+OWNER_EMAIL = os.getenv("OWNER_EMAIL", "rakeshnamburi2k4@gmail.com")
+OWNER_NAME = os.getenv("OWNER_NAME", "Rakesh Namburi")
+OWNER_PASSWORD = os.getenv("OWNER_PASSWORD", "ChangeThisOwner123!")
 DEMO_CITIZEN_EMAIL = "citizen.demo@spilton-demo.example"
 DEMO_SOURCE_VERSION = "demo-seed-not-official-lgd"
 
@@ -209,6 +216,22 @@ def seed():
             )
             db.add(admin)
 
+        # The real owner account. Only this account (plus the fictional demo
+        # admin) may review and approve catcher applications. Override with
+        # OWNER_EMAIL / OWNER_PASSWORD before deploying anywhere public.
+        owner = db.scalar(select(User).where(User.email == OWNER_EMAIL))
+        if owner is None:
+            owner = User(
+                name=OWNER_NAME,
+                email=OWNER_EMAIL,
+                phone=os.getenv("OWNER_PHONE", "9000000003"),
+                password_hash=hash_password(OWNER_PASSWORD),
+                role=Role.ADMIN,
+            )
+            db.add(owner)
+        elif owner.role != Role.ADMIN:
+            owner.role = Role.ADMIN
+
         citizen = db.scalar(select(User).where(User.email == DEMO_CITIZEN_EMAIL))
         if citizen is None:
             citizen = User(
@@ -253,6 +276,7 @@ def seed():
         db.commit()
         print("Demo data ready:")
         print(f"  admin    : {DEMO_ADMIN_EMAIL} / {DEMO_PASSWORD}")
+        print(f"  OWNER    : {OWNER_EMAIL} / {OWNER_PASSWORD}")
         print(f"  citizen  : {DEMO_CITIZEN_EMAIL} / {DEMO_PASSWORD}")
         for spec in DEMO_RESCUERS:
             print(f"  rescuer  : {spec['email']} / {DEMO_PASSWORD}")

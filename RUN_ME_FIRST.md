@@ -50,7 +50,8 @@ Demo logins created by the seed (local-only, fictional, password `ChangeThisDemo
 
 | Role | Email |
 | --- | --- |
-| Admin | `admin.demo@spilton-demo.example` |
+| **Owner (you)** | **`rakeshnamburi2k4@gmail.com`** — password `ChangeThisOwner123!` (change it) |
+| Admin (demo) | `admin.demo@spilton-demo.example` |
 | Citizen | `citizen.demo@spilton-demo.example` |
 | Rescuer (snake catcher) | `rescuer.ravi.demo@spilton-demo.example` |
 | Rescuer (snake catcher) | `rescuer.anitha.demo@spilton-demo.example` |
@@ -91,6 +92,21 @@ Rescuers who tick extra mandals in **Join as catcher** show a
 > money moves. That is by design.
 
 ---
+
+## Who is the owner?
+
+Only the **owner** account (`rakeshnamburi2k4@gmail.com` by default) and the
+fictional demo admin have the ADMIN role, so **only they can approve catcher
+applications**. Override the owner with `OWNER_EMAIL` / `OWNER_PASSWORD` /
+`OWNER_PHONE` environment variables before deploying anywhere public, and change
+the default password after the first sign-in.
+
+## Bell notifications
+
+The header bell polls the signed-in user's notifications and shows an unread
+count. Catcher applications, booking requests, accepts, chat messages and
+approvals all appear there and on **/notifications**, where each one can be
+marked as read.
 
 ## Approving a new catcher (why they stay "pending")
 

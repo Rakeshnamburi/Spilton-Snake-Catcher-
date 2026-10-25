@@ -129,6 +129,7 @@ def create_rescuer_application(
         authorization_expiry=payload.authorization_expiry,
         service_area_description=payload.service_area_description,
         service_radius_km=payload.service_radius_km,
+        coverage_subdistrict_codes=payload.coverage_subdistrict_codes,
         latitude=payload.latitude,
         longitude=payload.longitude,
         operating_hours=payload.operating_hours,
@@ -219,6 +220,7 @@ def nearby_rescuers(
     radius_km: float = Query(default=25, gt=0, le=100),
     state_code: str | None = Query(default=None, max_length=20),
     district_code: str | None = Query(default=None, max_length=20),
+    subdistrict_code: str | None = Query(default=None, max_length=20),
     min_experience: int = Query(default=0, ge=0, le=80),
     min_rating: float = Query(default=0, ge=0, le=5),
     language: str | None = Query(default=None, max_length=60),
@@ -281,7 +283,25 @@ def nearby_rescuers(
         .order_by(RescuerProfile.years_experience.desc(), RescuerProfile.created_at)
     )
     rows = db.execute(statement).all()
-    eligible: list[tuple[RescuerProfile, User, Organization, float | None]] = []
+    def coverage_scope(profile: RescuerProfile) -> str | None:
+        """How this profile covers the searched area, without exposing exact codes."""
+
+        if subdistrict_code:
+            covers = profile.subdistrict_code == subdistrict_code or subdistrict_code in (
+                profile.coverage_subdistrict_codes or []
+            )
+            if covers:
+                return "MANDAL"
+            if district_code and profile.district_code == district_code:
+                return "DISTRICT"
+            return "OTHER"
+        if district_code:
+            return "DISTRICT" if profile.district_code == district_code else "OTHER"
+        if state_code:
+            return "STATE" if profile.state_code == state_code else "OTHER"
+        return None
+
+    eligible: list[tuple[RescuerProfile, User, Organization, float | None, str | None]] = []
     for row in rows:
         profile, rescuer_user, organization = row[:3]
         if language and language not in {item.casefold() for item in (profile.languages or [])}:
@@ -294,14 +314,14 @@ def nearby_rescuers(
                 distance = haversine_km(latitude, longitude, profile.latitude, profile.longitude)
             if distance > min(radius_km, profile.service_radius_km):
                 continue
-        eligible.append((profile, rescuer_user, organization, distance))
+        eligible.append((profile, rescuer_user, organization, distance, coverage_scope(profile)))
     eligible.sort(key=lambda row: (row[3] is None, row[3] or 0, -row[0].years_experience))
     total = len(eligible)
     selected = eligible[(page - 1) * limit : page * limit]
     return RescuerPage(
         items=[
-            public_rescuer(profile, item_user, org, distance)
-            for profile, item_user, org, distance in selected
+            public_rescuer(profile, item_user, org, distance, scope)
+            for profile, item_user, org, distance, scope in selected
         ],
         total=total,
         page=page,

@@ -6,6 +6,7 @@ import type {DemoPayment, RescueEvidence, RescueReport} from "@spilton/shared-ty
 import {Button} from "@/components/ui/button";
 import {api, ApiError, API_URL} from "@/lib/api";
 import {formatDate, humanize, type Booking} from "@/lib/marketplace";
+import {estimateFare, formatInr} from "@/lib/pricing";
 
 function requestKey(prefix: string) {
   return prefix + "-" + crypto.randomUUID();
@@ -174,8 +175,8 @@ export function CustomerCompletionPanel({
     {booking.customer_confirmed_at && !payment && <form className="card" onSubmit={createPayment}>
       <div className="flex items-center gap-3"><IndianRupee className="text-forest"/><h2 className="text-xl font-black">Demo payment choice</h2></div>
       <p className="mt-2 text-sm text-danger"><strong>Simulation only.</strong> No card, UPI, bank details, charge, or payout is processed.</p>
-      <label className="mt-5 block"><span className="label">Method</span><select className="field" value={method} onChange={(event) => {const value = event.target.value as typeof method; setMethod(value); if (value === "NO_CHARGE") setAmount("0.00");}}><option value="NO_CHARGE">No charge</option><option value="DEMO_ONLINE">Simulate online success</option><option value="DEMO_CASH">Demo cash awaiting rescuer confirmation</option></select></label>
-      {method !== "NO_CHARGE" && <label className="mt-4 block"><span className="label">Illustrative amount (INR)</span><input className="field" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)}/></label>}
+      <label className="mt-5 block"><span className="label">Method</span><select className="field" value={method} onChange={(event) => {const value = event.target.value as typeof method; setMethod(value); setAmount(value === "NO_CHARGE" ? "0.00" : String(estimateFare(null).total));}}><option value="NO_CHARGE">No charge</option><option value="DEMO_ONLINE">UPI / PhonePe (online demo)</option><option value="DEMO_CASH">Cash on arrival (demo)</option></select></label>
+      {method !== "NO_CHARGE" && <label className="mt-4 block"><span className="label">Illustrative amount (INR)</span><input className="field" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)}/><span className="mt-1 block text-xs text-slate-500">Pre-filled from the demo estimate ({formatInr(estimateFare(null).total)}). You can edit it.</span></label>}
       <Button className="mt-5" disabled={busy} type="submit">Save demo financial record</Button>
     </form>}
     {payment && <section className="card"><h2 className="text-xl font-black">Demo receipt</h2><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="font-bold text-slate-500">Reference</dt><dd>{payment.payment_reference}</dd></div><div><dt className="font-bold text-slate-500">Status</dt><dd>{humanize(payment.status)}</dd></div><div><dt className="font-bold text-slate-500">Illustrative amount</dt><dd>₹{payment.amount}</dd></div><div><dt className="font-bold text-slate-500">Commission snapshot</dt><dd>{payment.commission_amount ? "₹" + payment.commission_amount : "Not applicable"}</dd></div></dl><p className="mt-4 text-xs text-danger">Not a tax invoice. No real money was collected or transferred.</p></section>}

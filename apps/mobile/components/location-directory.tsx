@@ -39,14 +39,17 @@ export function LocationDirectory({value, onChange}: {value: DirectoryLocation; 
     api<MarketplacePage<LocationItem>>(`/api/v1/locations/subdistricts?district_code=${encodeURIComponent(value.district_code)}&limit=100`).then(result => setSubdistricts(result.items)).catch(() => setSubdistricts([]));
   }, [value.district_code]);
   useEffect(() => {
-    if (!value.subdistrict_code) return setVillages([]);
-    api<MarketplacePage<LocationItem>>(`/api/v1/locations/villages?subdistrict_code=${encodeURIComponent(value.subdistrict_code)}&limit=100`).then(result => setVillages(result.items)).catch(() => setVillages([]));
-  }, [value.subdistrict_code]);
+    if (!value.subdistrict_code && !value.district_code) return setVillages([]);
+    const params = new URLSearchParams({limit: "200"});
+    if (value.subdistrict_code) params.set("subdistrict_code", value.subdistrict_code);
+    else params.set("district_code", value.district_code);
+    api<MarketplacePage<LocationItem>>(`/api/v1/locations/villages?${params}`).then(result => setVillages(result.items)).catch(() => setVillages([]));
+  }, [value.subdistrict_code, value.district_code]);
   return <View style={styles.group}>
     <DirectoryPicker label="State / Union Territory" value={value.state_code} options={states} onSelect={item => onChange({...value, state_code:item.lgd_code, district_code:"", subdistrict_code:"", village_code:""})}/>
     <DirectoryPicker label="District" value={value.district_code} options={districts} disabled={!value.state_code} onSelect={item => onChange({...value, district_code:item.lgd_code, subdistrict_code:"", village_code:""})}/>
     <DirectoryPicker label="Subdistrict / mandal / taluk / tehsil" value={value.subdistrict_code} options={subdistricts} disabled={!value.district_code} onSelect={item => onChange({...value, subdistrict_code:item.lgd_code, village_code:""})}/>
-    <DirectoryPicker label="Village" value={value.village_code} options={villages} disabled={!value.subdistrict_code} onSelect={item => onChange({...value, village_code:item.lgd_code})}/>
+    <DirectoryPicker label="Village (pick a district to list its villages)" value={value.village_code} options={villages} disabled={!value.district_code} onSelect={item => onChange({...value, village_code:item.lgd_code})}/>
     {error ? <Text style={styles.error}>{error}</Text> : null}
     {!states.length && !error ? <Text style={styles.note}>No official LGD data is bundled. An administrator must import a current Government of India export.</Text> : null}
     <Text style={styles.note}>GPS is not treated as a verified village address. Confirm or correct the directory selection.</Text>

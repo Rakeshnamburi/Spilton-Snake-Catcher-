@@ -1,6 +1,6 @@
 import math
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -70,16 +70,64 @@ def subdistricts(
 
 @router.get("/villages", response_model=LocationPage)
 def villages(
-    subdistrict_code: str = Query(min_length=1, max_length=20),
+    subdistrict_code: str | None = Query(default=None, max_length=20),
+    district_code: str | None = Query(default=None, max_length=20),
+    q: str | None = Query(default=None, max_length=100),
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
     include_inactive: bool = False,
     db: Session = Depends(get_db),
 ):
-    filters = [Village.subdistrict_code == subdistrict_code.strip()]
-    if not include_inactive:
-        filters.append(Village.is_active.is_(True))
-    return _page(db, Village, filters, page, limit)
+    """Villages for a mandal, or for a whole district.
+
+    Selecting a district lists every village in it (joined through the
+    sub-district), which is what people expect when they only know their
+    district. `q` filters by village name so large districts stay usable.
+    """
+
+    if not subdistrict_code and not district_code:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide subdistrict_code or district_code",
+        )
+
+    def _conditions() -> list:
+        conditions = []
+        if subdistrict_code:
+            conditions.append(Village.subdistrict_code == subdistrict_code.strip())
+        if not include_inactive:
+            conditions.append(Village.is_active.is_(True))
+        if q and q.strip():
+            conditions.append(Village.name.ilike(f"%{q.strip()}%"))
+        return conditions
+
+    statement = select(Village)
+    count_statement = select(func.count()).select_from(Village)
+    if district_code:
+        join_on = Village.subdistrict_code == Subdistrict.lgd_code
+        statement = statement.join(Subdistrict, join_on)
+        count_statement = count_statement.join(Subdistrict, join_on)
+        district_filter = Subdistrict.district_code == district_code.strip()
+        statement = statement.where(district_filter)
+        count_statement = count_statement.where(district_filter)
+
+    conditions = _conditions()
+    statement = statement.where(*conditions)
+    count_statement = count_statement.where(*conditions)
+
+    total = db.scalar(count_statement) or 0
+    items = db.scalars(
+        statement.order_by(Village.name, Village.lgd_code)
+        .offset((page - 1) * limit)
+        .limit(limit)
+    ).all()
+    return LocationPage(
+        items=[LocationItem.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=math.ceil(total / limit) if total else 0,
+    )
 
 
 @router.get("/search", response_model=list[LocationSearchItem])

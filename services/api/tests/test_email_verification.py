@@ -90,3 +90,27 @@ async def test_email_otp_login_confirms_the_address(client, verification_on):
     )
     assert verified.status_code == 200
     assert verified.json()["user"]["email_verified"] is True
+
+
+async def test_website_enquiry_is_delivered_to_the_project_mailbox(client):
+    sent = await client.post(
+        "/api/v1/enquiries",
+        json={
+            "name": "Partnership Person",
+            "email": "partner@example.com",
+            "phone": "9812340003",
+            "subject": "Partnership enquiry",
+            "message": "We would like to discuss a rescue partnership in Telangana.",
+        },
+    )
+    assert sent.status_code == 201
+    body = sent.json()
+    assert body["sent"] is True
+    # No provider configured in tests, so it falls back to the log transport.
+    assert body["transport"] == "console"
+
+    too_short = await client.post(
+        "/api/v1/enquiries",
+        json={"name": "A B", "email": "a@example.com", "subject": "Hi", "message": "short"},
+    )
+    assert too_short.status_code == 422

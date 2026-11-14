@@ -69,8 +69,10 @@ class Settings(BaseSettings):
     # Preferred over SMTP on hosts that block outbound SMTP (Render free plan).
     # Verify a single sender address in Brevo and put its API key here.
     brevo_api_key: str | None = None
-    brevo_sender_email: str = "rakeshnamburi2k4@gmail.com"
+    brevo_sender_email: str = "spiltoconnections@gmail.com"
     brevo_sender_name: str = "SPILTON Snake Rescue"
+    # Where website enquiries and partnership messages are delivered.
+    contact_email: str = "spiltoconnections@gmail.com"
 
     # --- Social / OAuth sign-in --------------------------------------------
     # api_public_url is the browser-reachable base URL of THIS API. OAuth

@@ -47,6 +47,7 @@ from app.schemas.api import (
     AccountDataRequestResponse,
     AdminIncidentPage,
     EmergencyContactResponse,
+    EnquiryCreate,
     IncidentCreate,
     IncidentEventResponse,
     IncidentMediaResponse,
@@ -60,7 +61,7 @@ from app.schemas.api import (
     RegisterResponse,
     UserResponse,
 )
-from app.services.auth_email import AuthEmailError
+from app.services.auth_email import AuthEmailError, send_system_email
 from app.services.email_verification import issue_code, mark_verified
 from app.services.incident_workflow import (
     CITIZEN_CANCELLABLE,
@@ -698,6 +699,38 @@ def cancel_incident(
     )
     db.commit()
     return load_incident(db, incident.id)
+
+
+@router.post("/enquiries", status_code=201)
+def create_enquiry(payload: EnquiryCreate, request: Request):
+    """Website contact form. Delivers the message to the project mailbox."""
+
+    settings = get_settings()
+    remote = request.client.host if request.client else "unknown"
+    enforce_rate_limit(f"enquiry:{remote}", limit=5, window_seconds=900)
+
+    body = (
+        "New enquiry from the SPILTON website\n\n"
+        f"Name:    {payload.name}\n"
+        f"Email:   {payload.email}\n"
+        f"Phone:   {payload.phone or '-'}\n"
+        f"Subject: {payload.subject}\n\n"
+        f"{payload.message}\n"
+    )
+    try:
+        transport = send_system_email(
+            recipient=settings.contact_email,
+            subject=f"[SPILTON enquiry] {payload.subject}",
+            text=body,
+            reply_to=payload.email,
+        )
+    except AuthEmailError as error:
+        raise api_error(502, "EMAIL_SEND_FAILED", str(error)) from error
+    return {
+        "sent": True,
+        "transport": transport,
+        "message": "Thank you - your message has been sent. We reply to the address you gave.",
+    }
 
 
 @router.get("/emergency-contacts", response_model=list[EmergencyContactResponse])

@@ -127,6 +127,46 @@ social buttons simply do not appear.
 
 ---
 
+## Brevo (recommended email provider)
+
+Brevo sends over HTTPS, so it works on hosts that block outbound SMTP (Render's
+free plan blocks SMTP). It is the recommended production path.
+
+1. Create a free account at <https://brevo.com> and verify a **single sender
+   address** (Senders & IP -> Senders -> Add a sender). A Gmail address is fine;
+   Brevo emails a link to confirm it.
+2. Copy an **API key** (SMTP & API -> API Keys -> Create a new API key).
+3. Set these on the API service (locally in `services/api/.env`, on Render in the
+   Environment tab):
+
+```
+BREVO_API_KEY=xkeysib-...
+BREVO_SENDER_EMAIL=rakeshnamburi2k4@gmail.com
+BREVO_SENDER_NAME=SPILTON Snake Rescue
+```
+
+Transport order is **Brevo -> SMTP -> console**. With no key configured the code
+is printed in the API log and returned as `dev_code` in development only.
+
+## Email verification (signup confirmation)
+
+New customer and catcher accounts must confirm their address before signing in:
+
+1. `POST /api/v1/auth/register` creates the account but **does not sign in**. It
+   emails a 6-digit code and returns `email_verification_sent`.
+2. `POST /api/v1/auth/email/verify` with the code signs the person in and marks
+   the address confirmed.
+3. `POST /api/v1/auth/email/resend` sends a fresh code (it answers the same way
+   whether or not the address exists, so it cannot discover accounts).
+4. Password sign-in answers **403 `EMAIL_NOT_VERIFIED`** until confirmed.
+
+Signing in with an **email OTP** or with **Google / Microsoft** counts as proof
+of ownership and confirms the address automatically. Accounts that existed before
+this change are grandfathered as verified by migration `0009`.
+
+Set `REQUIRE_EMAIL_VERIFICATION=false` to switch the gate off (the automated test
+suite does this).
+
 ## 4. Configure Email OTP (Gmail SMTP)
 
 The OTP is a 6-digit code, hashed at rest, valid for 10 minutes, single-use,

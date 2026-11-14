@@ -273,6 +273,12 @@ def seed():
                 )
             )
 
+        # Seeded accounts skip email verification: they are fictional demo logins
+        # and the owner account is created by the operator.
+        verified_at = datetime.now(timezone.utc)
+        for seeded in db.scalars(select(User).where(User.email_verified_at.is_(None))).all():
+            seeded.email_verified_at = verified_at
+
         db.commit()
         print("Demo data ready:")
         print(f"  admin    : {DEMO_ADMIN_EMAIL} / {DEMO_PASSWORD}")

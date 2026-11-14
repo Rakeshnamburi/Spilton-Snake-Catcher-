@@ -44,6 +44,27 @@ class UserResponse(BaseModel):
     email: EmailStr
     phone: str | None = None
     role: Role
+    email_verified: bool = False
+
+
+class RegisterResponse(BaseModel):
+    """Signing up no longer signs you in: the address must be confirmed first."""
+
+    user: UserResponse
+    email_verification_sent: bool
+    transport: str
+    expires_in_seconds: int
+    message: str
+    dev_code: str | None = None
+
+
+class EmailVerifyBody(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=10)
+
+
+class EmailResendBody(BaseModel):
+    email: EmailStr
 
 
 class OtpRequestBody(BaseModel):

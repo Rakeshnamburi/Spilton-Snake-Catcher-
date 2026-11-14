@@ -29,6 +29,8 @@ from app.db.session import get_db
 from app.models.entities import AuditLog, AuthOtp, OAuthIdentity, Role, User
 from app.schemas.api import (
     AuthProvidersResponse,
+    EmailResendBody,
+    EmailVerifyBody,
     LoginResponse,
     OAuthExchangeBody,
     OtpRequestBody,
@@ -37,6 +39,7 @@ from app.schemas.api import (
     PasswordResetBody,
 )
 from app.services.auth_email import AuthEmailError, send_otp_email
+from app.services.email_verification import check_code, issue_code, mark_verified
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -204,9 +207,11 @@ def otp_request(payload: OtpRequestBody, request: Request, db: Session = Depends
     enforce_rate_limit(f"otp-ip:{_client_ip(request)}", limit=20, window_seconds=300)
 
     now = datetime.now(timezone.utc)
+    # Only LOGIN codes count for the resend cooldown: a signup confirmation or a
+    # password-reset code for the same address must not block a sign-in code.
     recent = db.scalar(
         select(AuthOtp)
-        .where(AuthOtp.email == email)
+        .where(AuthOtp.email == email, AuthOtp.purpose == "LOGIN")
         .order_by(AuthOtp.created_at.desc())
         .limit(1)
     )
@@ -285,7 +290,73 @@ def otp_verify(
     db.refresh(user)
     if not user.is_active:
         raise api_error(403, "ACCOUNT_DISABLED", "This account is disabled.")
+    # Receiving the code proves the address belongs to them.
+    mark_verified(db, user)
     return _issue_session(db, response, user)
+
+
+# --------------------------------------------------------------------------- #
+# Email verification (signup confirmation)
+# --------------------------------------------------------------------------- #
+@router.post("/email/verify", response_model=LoginResponse)
+def email_verify(
+    payload: EmailVerifyBody,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Confirm an address with the emailed code, then sign the person in."""
+
+    enforce_rate_limit(f"email-verify:{_client_ip(request)}", limit=20, window_seconds=900)
+    email = payload.email.strip().lower()
+    status = check_code(db, email, payload.code)
+    if status == "NOT_FOUND":
+        raise api_error(400, "VERIFY_CODE_NOT_FOUND", "Request a new confirmation code.")
+    if status == "EXPIRED":
+        raise api_error(400, "VERIFY_CODE_EXPIRED", "That code has expired. Request a new one.")
+    if status == "TOO_MANY":
+        raise api_error(429, "VERIFY_TOO_MANY_ATTEMPTS", "Too many attempts. Request a new code.")
+    if status == "INVALID":
+        raise api_error(400, "VERIFY_CODE_INVALID", "That code is incorrect.")
+
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        raise api_error(400, "VERIFY_CODE_INVALID", "That code is incorrect.")
+    if not user.is_active:
+        raise api_error(403, "ACCOUNT_DISABLED", "This account is disabled.")
+
+    mark_verified(db, user)
+    return _issue_session(db, response, user)
+
+
+@router.post("/email/resend")
+def email_resend(
+    payload: EmailResendBody, request: Request, db: Session = Depends(get_db)
+):
+    """Send a fresh confirmation code.
+
+    Answers the same way whether or not the address exists, so it cannot be used
+    to discover accounts.
+    """
+
+    settings = get_settings()
+    email = payload.email.strip().lower()
+    enforce_rate_limit(f"email-resend:{email}", limit=5, window_seconds=900)
+    enforce_rate_limit(f"email-resend-ip:{_client_ip(request)}", limit=20, window_seconds=900)
+
+    result: dict = {"sent": True, "expires_in_seconds": settings.otp_ttl_minutes * 60}
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None or not user.is_active or user.email_verified_at is not None:
+        return result
+
+    try:
+        transport, code = issue_code(db, email)
+    except AuthEmailError as error:
+        raise api_error(502, "EMAIL_SEND_FAILED", str(error)) from error
+
+    if transport == "console" and settings.environment.lower() == "development":
+        result["dev_code"] = code
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -308,6 +379,9 @@ def password_forgot(
 
     result: dict = {"sent": True, "expires_in_seconds": settings.otp_ttl_minutes * 60}
     user = db.scalar(select(User).where(User.email == email))
+    if user is not None and user.is_active:
+        # The provider has already verified this address.
+        mark_verified(db, user)
     if user is None or not user.is_active:
         return result
 

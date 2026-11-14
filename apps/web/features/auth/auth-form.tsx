@@ -48,10 +48,23 @@ export function AuthForm({mode}: {mode: Mode}) {
 
   async function submit(values: Values) {
     try {
-      await api(`/api/v1/auth/${mode}`, {method: "POST", body: JSON.stringify(values)});
+      const result = await api<{email_verification_sent?: boolean}>(`/api/v1/auth/${mode}`, {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      if (mode === "register" && result?.email_verification_sent !== undefined) {
+        // Signing up no longer signs you in: confirm the address first.
+        router.push(`/verify-email?email=${encodeURIComponent(values.email)}`);
+        return;
+      }
       router.push(mode === "login" ? "/track" : "/report");
     } catch (reason) {
-      setError("root", {message: reason instanceof Error ? reason.message : "Unable to continue."});
+      const message = reason instanceof Error ? reason.message : "Unable to continue.";
+      if (message.toLowerCase().includes("confirm your email")) {
+        router.push(`/verify-email?email=${encodeURIComponent(values.email)}`);
+        return;
+      }
+      setError("root", {message});
     }
   }
 

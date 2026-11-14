@@ -57,8 +57,11 @@ from app.schemas.api import (
     LoginResponse,
     ProfileUpdateRequest,
     RegisterRequest,
+    RegisterResponse,
     UserResponse,
 )
+from app.services.auth_email import AuthEmailError
+from app.services.email_verification import issue_code, mark_verified
 from app.services.incident_workflow import (
     CITIZEN_CANCELLABLE,
     InvalidStatusTransition,
@@ -171,13 +174,25 @@ def platform_status():
     }
 
 
-@router.post("/auth/register", response_model=LoginResponse, status_code=201)
+@router.post(
+    "/auth/register",
+    response_model=LoginResponse | RegisterResponse,
+    status_code=201,
+)
 def register(
     payload: RegisterRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
+    """Create an account.
+
+    With email verification on (the default) the account is created but NOT
+    signed in: a confirmation code goes to the address, and the customer or
+    catcher must enter it before they can sign in.
+    """
+
+    settings = get_settings()
     remote = request.client.host if request.client else "unknown"
     enforce_rate_limit(f"register:{remote}", limit=5, window_seconds=60)
     email = payload.email.lower()
@@ -193,9 +208,39 @@ def register(
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token(user.id, user.token_version)
-    csrf_token = set_session_cookie(response, token)
-    return LoginResponse(user=user, access_token=token, csrf_token=csrf_token)
+
+    if not settings.require_email_verification:
+        mark_verified(db, user)
+        token = create_access_token(user.id, user.token_version)
+        csrf_token = set_session_cookie(response, token)
+        return LoginResponse(user=user, access_token=token, csrf_token=csrf_token)
+
+    transport = "console"
+    code = ""
+    sent = True
+    try:
+        transport, code = issue_code(db, email)
+    except AuthEmailError as error:
+        sent = False
+        logger.warning(
+            "signup_verification_email_failed email=%s error=%s", email, type(error).__name__
+        )
+        del error
+
+    result = RegisterResponse(
+        user=UserResponse.model_validate(user),
+        email_verification_sent=sent,
+        transport=transport,
+        expires_in_seconds=settings.otp_ttl_minutes * 60,
+        message=(
+            "We emailed a confirmation code. Enter it to finish signing up."
+            if sent
+            else "We could not send the confirmation email. Use 'Resend code' on the verify page."
+        ),
+    )
+    if sent and transport == "console" and settings.environment.lower() == "development":
+        result.dev_code = code
+    return result
 
 
 @router.post("/auth/login", response_model=LoginResponse)
@@ -207,6 +252,13 @@ def login(
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
         raise api_error(401, "INVALID_CREDENTIALS", "Invalid email or password")
+    if get_settings().require_email_verification and user.email_verified_at is None:
+        raise api_error(
+            403,
+            "EMAIL_NOT_VERIFIED",
+            "Confirm your email address before signing in. Open the confirmation email, "
+            "or use 'Resend code' on the verify page.",
+        )
     token = create_access_token(user.id, user.token_version)
     csrf_token = set_session_cookie(response, token)
     return LoginResponse(user=user, access_token=token, csrf_token=csrf_token)

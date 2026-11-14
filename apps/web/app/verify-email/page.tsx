@@ -1,0 +1,2 @@
+import {VerifyEmailForm} from "@/features/auth/verify-email-form";
+export default function VerifyEmail(){return <section className="bg-mist py-16"><div className="container-page"><div className="mb-8 text-center"><p className="eyebrow">One more step</p><h1 className="mt-2 text-4xl font-black">Confirm your email</h1><p className="mt-3 text-slate-600">New customer and catcher accounts must confirm their address before signing in.</p></div><VerifyEmailForm/></div></section>}

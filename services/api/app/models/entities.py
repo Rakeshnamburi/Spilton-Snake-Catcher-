@@ -115,10 +115,19 @@ class User(TimestampMixin, Base):
     role: Mapped[Role] = mapped_column(Enum(Role), default=Role.CITIZEN, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     token_version: Mapped[int] = mapped_column(Integer, default=0)
+    # Set when the address is confirmed by a code, or by a verified Google /
+    # Microsoft sign-in. Password sign-in is refused until this is filled in.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     incidents: Mapped[list["Incident"]] = relationship(back_populates="reporter")
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None
     oauth_identities: Mapped[list["OAuthIdentity"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

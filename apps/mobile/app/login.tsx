@@ -51,7 +51,12 @@ export default function Login() {
       await saveToken(result.access_token);
       router.replace(nextRoute());
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to sign in");
+      const message = requestError instanceof Error ? requestError.message : "Unable to sign in";
+      if (message.toLowerCase().includes("confirm your email")) {
+        router.push({pathname: "/verify-email", params: {email: email.trim()}});
+        return;
+      }
+      setError(message);
     } finally {
       submitLock.current = false;
       setSubmitting(false);

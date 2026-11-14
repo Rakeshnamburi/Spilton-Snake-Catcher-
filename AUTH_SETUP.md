@@ -141,9 +141,13 @@ free plan blocks SMTP). It is the recommended production path.
 
 ```
 BREVO_API_KEY=xkeysib-...
-BREVO_SENDER_EMAIL=rakeshnamburi2k4@gmail.com
+BREVO_SENDER_EMAIL=spiltoconnections@gmail.com
 BREVO_SENDER_NAME=SPILTON Snake Rescue
 ```
+
+The project mailbox is **spiltoconnections@gmail.com**: it is the default sender
+(`BREVO_SENDER_EMAIL`) and the destination for website enquiries
+(`CONTACT_EMAIL`).
 
 Transport order is **Brevo -> SMTP -> console**. With no key configured the code
 is printed in the API log and returned as `dev_code` in development only.

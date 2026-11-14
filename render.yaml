@@ -70,9 +70,11 @@ services:
       - key: BREVO_API_KEY
         sync: false
       - key: BREVO_SENDER_EMAIL
-        value: rakeshnamburi2k4@gmail.com
+        value: spiltoconnections@gmail.com
       - key: BREVO_SENDER_NAME
         value: SPILTON Snake Rescue
+      - key: CONTACT_EMAIL
+        value: spiltoconnections@gmail.com
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

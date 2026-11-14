@@ -58,6 +58,16 @@ class RegisterResponse(BaseModel):
     dev_code: str | None = None
 
 
+class EnquiryCreate(BaseModel):
+    """Public contact / partnership enquiry from the website."""
+
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    phone: str | None = Field(default=None, max_length=20)
+    subject: str = Field(min_length=3, max_length=160)
+    message: str = Field(min_length=10, max_length=4000)
+
+
 class EmailVerifyBody(BaseModel):
     email: EmailStr
     code: str = Field(min_length=4, max_length=10)

@@ -44,6 +44,7 @@ CSRF_EXEMPT_PATHS = {
     "/api/v1/auth/password/reset",
     "/api/v1/auth/email/verify",
     "/api/v1/auth/email/resend",
+    "/api/v1/enquiries",
 }
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,128}$")

@@ -38,9 +38,11 @@ def _body(code: str, ttl_minutes: int) -> str:
     )
 
 
-def _send_brevo(*, recipient: str, subject: str, text: str) -> None:
+def _send_brevo(
+    *, recipient: str, subject: str, text: str, reply_to: str | None = None
+) -> None:
     settings = get_settings()
-    payload = {
+    payload: dict = {
         "sender": {
             "email": settings.brevo_sender_email,
             "name": settings.brevo_sender_name,
@@ -50,6 +52,8 @@ def _send_brevo(*, recipient: str, subject: str, text: str) -> None:
         "textContent": text,
         "htmlContent": "<p>" + text.replace("\n\n", "</p><p>").replace("\n", "<br/>") + "</p>",
     }
+    if reply_to:
+        payload["replyTo"] = {"email": reply_to}
     try:
         response = httpx.post(
             BREVO_ENDPOINT,
@@ -71,12 +75,16 @@ def _send_brevo(*, recipient: str, subject: str, text: str) -> None:
         raise AuthEmailError("Could not send the email. Try again shortly.") from error
 
 
-def _send_smtp(*, recipient: str, subject: str, text: str) -> None:
+def _send_smtp(
+    *, recipient: str, subject: str, text: str, reply_to: str | None = None
+) -> None:
     settings = get_settings()
     message = EmailMessage()
     message["From"] = settings.smtp_from_address
     message["To"] = recipient
     message["Subject"] = subject
+    if reply_to:
+        message["Reply-To"] = reply_to
     message.set_content(text)
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as client:
@@ -115,5 +123,33 @@ def send_otp_email(
         recipient,
         code,
         ttl_minutes,
+    )
+    return "console"
+
+
+def send_system_email(
+    *, recipient: str, subject: str, text: str, reply_to: str | None = None
+) -> str:
+    """Send a non-authentication email (for example a website enquiry).
+
+    Returns the transport used. With nothing configured the message is logged and
+    "console" is returned, so a development machine still shows what was sent.
+    """
+
+    settings = get_settings()
+    if settings.brevo_configured:
+        _send_brevo(recipient=recipient, subject=subject, text=text, reply_to=reply_to)
+        logger.info("system_email_sent transport=brevo recipient=%s", recipient)
+        return "brevo"
+    if settings.smtp_configured:
+        _send_smtp(recipient=recipient, subject=subject, text=text, reply_to=reply_to)
+        logger.info("system_email_sent transport=smtp recipient=%s", recipient)
+        return "smtp"
+    logger.warning(
+        "system_email_console_delivery recipient=%s subject=%s body=%s "
+        "(set BREVO_API_KEY or SMTP_* in .env to send real email)",
+        recipient,
+        subject,
+        text,
     )
     return "console"

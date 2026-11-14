@@ -297,6 +297,35 @@ def import_lgd_file(
     inserted = updated = skipped = 0
     seen: dict[str, dict] = {}
     model = ENTITY_CONFIG[entity_type]["model"]
+    config = ENTITY_CONFIG[entity_type]
+
+    # Look parents and existing codes up ONCE. The village export is ~95k rows,
+    # so querying per row meant ~285k round trips and made a fresh import take
+    # many minutes - long enough to time out on a small host.
+    parent_codes: set[str] = set()
+    district_codes: set[str] = set()
+    if entity_type == "urban_local_bodies":
+        parent_codes = {code for (code,) in db.execute(select(State.lgd_code))}
+        district_codes = {code for (code,) in db.execute(select(District.lgd_code))}
+    elif entity_type != "states":
+        parent_codes = {code for (code,) in db.execute(select(config["parent_model"].lgd_code))}
+    existing_codes = {code for (code,) in db.execute(select(model.lgd_code))}
+    pending = 0
+
+    def _check_parent(values: dict) -> None:
+        if entity_type == "states":
+            return
+        if entity_type == "urban_local_bodies":
+            if values["state_code"] not in parent_codes:
+                raise LGDImportError(f"Unknown parent state code: {values['state_code']}")
+            district_code = values.get("district_code")
+            if district_code and district_code not in district_codes:
+                raise LGDImportError(f"Unknown parent district code: {district_code}")
+            return
+        parent_code = values[config["parent_field"]]
+        if parent_code not in parent_codes:
+            raise LGDImportError(f"Unknown parent code: {parent_code}")
+
     try:
         for row_number, row in enumerate(rows, start=2):
             values = _record_values(entity_type, row, source_version.strip())
@@ -311,12 +340,20 @@ def import_lgd_file(
                 skipped += 1
                 continue
             seen[code] = values
-            _validate_parent(db, entity_type, values)
+            _check_parent(values)
+            if code not in existing_codes:
+                db.add(model(**values))
+                existing_codes.add(code)
+                inserted += 1
+                pending += 1
+                if pending >= 2000:
+                    db.flush()
+                    pending = 0
+                continue
             existing = db.scalar(select(model).where(model.lgd_code == code))
-            if existing is None:
+            if existing is None:  # pragma: no cover - defensive
                 db.add(model(**values))
                 inserted += 1
-                db.flush()
                 continue
             changed = False
             for key, value in values.items():
@@ -330,6 +367,7 @@ def import_lgd_file(
                 updated += 1
             else:
                 skipped += 1
+        db.flush()
 
         job = db.get(LocationImportJob, job.id)
         job.status = "COMPLETED"

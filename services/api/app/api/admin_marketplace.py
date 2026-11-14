@@ -704,3 +704,41 @@ def admin_tracking_sessions(
         "pages": math.ceil(total / limit) if total else 0,
         "privacy_note": "Exact movement coordinates are deliberately excluded.",
     }
+
+
+@router.get("/audit")
+def audit_log(
+    action: str | None = Query(default=None, max_length=100),
+    entity_type: str | None = Query(default=None, max_length=80),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_roles(Role.ADMIN)),
+):
+    """Who did what. Sign-ins, bookings, payments, approvals and denied access.
+
+    This is the owner's answer to "who did that?" - the AuditLog rows were always
+    written, but until now there was no way to read them back.
+    """
+
+    filters = []
+    if action:
+        filters.append(AuditLog.action == action.strip())
+    if entity_type:
+        filters.append(AuditLog.entity_type == entity_type.strip())
+    rows = db.scalars(
+        select(AuditLog)
+        .where(*filters)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "id": str(row.id),
+            "action": row.action,
+            "entity_type": row.entity_type,
+            "entity_id": row.entity_id,
+            "actor_id": str(row.actor_id) if row.actor_id else None,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]

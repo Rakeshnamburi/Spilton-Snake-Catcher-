@@ -1,0 +1,96 @@
+# Render Blueprint for SPILTON Snake Rescue.
+#
+# How to use:
+#   Render dashboard -> New + -> Blueprint -> pick this repository -> Apply.
+#   It creates the Postgres database, the API and the website together, with
+#   most environment variables filled in for you.
+#
+# Unlike a file-backed SQLite app, this stack uses managed Postgres, so it fits
+# Render's free plan (no paid disk required).
+#
+# After the first deploy, open the API service's Shell and run once:
+#   python -m app.db.load_lgd      # 36 states, 763 districts, 6,921 mandals, 95k villages
+#   python -m app.db.seed          # demo catchers + the owner account
+#
+# Then set the two sync:false values below (they are filled in the dashboard):
+#   spilton-api : WEB_ORIGINS, WEB_APP_URL  -> https://<your-web>.onrender.com
+#                 API_PUBLIC_URL            -> https://<your-api>.onrender.com
+#   spilton-web : NEXT_PUBLIC_API_URL       -> https://<your-api>.onrender.com
+
+databases:
+  - name: spilton-pg
+    databaseName: spilton
+    user: spilton
+    plan: free
+    region: singapore
+
+services:
+  - type: web
+    name: spilton-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: services/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    preDeployCommand: alembic upgrade head
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: ENVIRONMENT
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      # The app rewrites postgresql:// to postgresql+psycopg:// automatically.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: spilton-pg
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RESCUER_STALE_MINUTES
+        value: "43200"
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: WEB_APP_URL
+        sync: false
+      - key: WEB_ORIGINS
+        sync: false
+      # Optional integrations: fill these in the dashboard to switch them on.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_ADDRESS
+        sync: false
+      - key: OWNER_EMAIL
+        value: rakeshnamburi2k4@gmail.com
+      - key: OWNER_PASSWORD
+        sync: false
+
+  - type: web
+    name: spilton-web
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npm run build:web
+    startCommand: npm run start --workspace @spilton/web -- -p $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Baked in at build time, so set it before the first build.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

@@ -95,6 +95,22 @@ class Settings(BaseSettings):
             return value.strip().lower() in {"1", "true", "yes", "on"}
         return value
 
+    @field_validator("database_url")
+    @classmethod
+    def normalise_database_url(cls, value: str) -> str:
+        """Accept the URL a host like Render hands out.
+
+        Render (and most hosts) give a bare `postgresql://` connection string,
+        but SQLAlchemy needs the psycopg driver named explicitly. Rewriting it
+        here means a deploy works without anyone hand-editing the value.
+        """
+
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+psycopg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
+
     @field_validator("jwt_secret")
     @classmethod
     def validate_secret(cls, value: str) -> str:

@@ -53,10 +53,15 @@ export default function Register() {
     setSubmitting(true);
     setError("");
     try {
-      const result = await api<LoginResponse>("/api/v1/auth/register", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const result = await api<LoginResponse & {email_verification_sent?: boolean}>(
+        "/api/v1/auth/register",
+        {method: "POST", body: JSON.stringify(payload)},
+      );
+      if (result.email_verification_sent !== undefined) {
+        // New accounts confirm the address before they can sign in.
+        router.replace({pathname: "/verify-email", params: {email: payload.email}});
+        return;
+      }
       if (!result.access_token) throw new Error("The server did not return a mobile access token.");
       await saveToken(result.access_token);
       router.replace(returnTo === "report" ? "/report-reporter" : "/report");

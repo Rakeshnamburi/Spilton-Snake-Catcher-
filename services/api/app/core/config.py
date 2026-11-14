@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 5
     otp_resend_cooldown_seconds: int = 30
 
+    # When true (the default) a new password account must confirm its email
+    # address before it can sign in. Tests and legacy flows turn this off.
+    require_email_verification: bool = True
+
+    # --- Brevo (transactional email over HTTPS) ----------------------------
+    # Preferred over SMTP on hosts that block outbound SMTP (Render free plan).
+    # Verify a single sender address in Brevo and put its API key here.
+    brevo_api_key: str | None = None
+    brevo_sender_email: str = "rakeshnamburi2k4@gmail.com"
+    brevo_sender_name: str = "SPILTON Snake Rescue"
+
     # --- Social / OAuth sign-in --------------------------------------------
     # api_public_url is the browser-reachable base URL of THIS API. OAuth
     # providers redirect back to "{api_public_url}/api/v1/auth/oauth/{p}/callback".
@@ -129,6 +140,10 @@ class Settings(BaseSettings):
     @property
     def email_otp_enabled(self) -> bool:
         return True
+
+    @property
+    def brevo_configured(self) -> bool:
+        return bool(self.brevo_api_key and self.brevo_sender_email)
 
     @property
     def smtp_configured(self) -> bool:

@@ -66,6 +66,13 @@ services:
         sync: false
       - key: MICROSOFT_CLIENT_SECRET
         sync: false
+      # Brevo sends over HTTPS, which works on Render's free plan (SMTP is blocked).
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        value: rakeshnamburi2k4@gmail.com
+      - key: BREVO_SENDER_NAME
+        value: SPILTON Snake Rescue
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

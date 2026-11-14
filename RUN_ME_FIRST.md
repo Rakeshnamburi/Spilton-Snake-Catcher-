@@ -43,7 +43,8 @@ Then open <http://localhost:3000>
 | --- | --- | --- |
 | API alive | <http://localhost:8000/health> | `{"status":"ok"}` |
 | Website | <http://localhost:3000/login> | Login page loads |
-| Sign in | create an account on `/register` | Redirects, no "Failed to fetch" |
+| Sign up | create an account on `/register` | Sends a confirmation code, then `/verify-email` |
+| Sign in | after confirming the address | Redirects, no "Failed to fetch" |
 | Backend suite | `cd services/api && python -m pytest tests -q` | `57 passed` |
 
 Demo logins created by the seed (local-only, fictional, password `ChangeThisDemo123!`):

@@ -1,6 +1,9 @@
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_spilton.db")
+# The existing suite signs up and immediately uses the session; the email
+# verification gate is covered by its own tests.
+os.environ.setdefault("REQUIRE_EMAIL_VERIFICATION", "false")
 import pytest
 from httpx import ASGITransport, AsyncClient
 
